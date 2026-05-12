@@ -4,11 +4,12 @@ hairline borders, Inter + PingFang typography, dashboard-style overview.
 import time
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, Qt, QTimer, QSize, pyqtSignal
+from PyQt6.QtCore import QObject, QPoint, QPointF, Qt, QTimer, QSize, pyqtSignal
 from PyQt6.QtGui import (
-    QAction, QIcon, QPainter, QPixmap, QColor, QFont, QLinearGradient,
-    QPen, QBrush,
+    QAction, QIcon, QPainter, QPainterPath, QPixmap, QColor, QFont,
+    QLinearGradient, QPen, QBrush,
 )
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
     QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget,
     QListWidgetItem, QMainWindow, QProgressBar, QPushButton, QStackedWidget,
@@ -184,129 +185,209 @@ def _muted(text: str, size: int = 12) -> QLabel:
     return lbl
 
 
+def _center_combo(c: QComboBox) -> None:
+    """Center-align the displayed selected text inside a non-editable QComboBox.
+
+    Qt's QComboBox renders the current text via a hidden QLineEdit only when
+    editable=True. Trick: make it editable but read-only, then center-align the
+    line edit. Also paint the popup items centered via the item delegate.
+    """
+    c.setEditable(True)
+    le = c.lineEdit()
+    le.setReadOnly(True)
+    le.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    le.setCursor(Qt.CursorShape.ArrowCursor)
+    le.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    le.setStyleSheet("QLineEdit { background: transparent; border: none; }")
+    # Center popup items too so the menu matches the selected display.
+    for i in range(c.count()):
+        c.setItemData(i, Qt.AlignmentFlag.AlignCenter, Qt.ItemDataRole.TextAlignmentRole)
+
+
+_ICONS_DIR = Path(__file__).parent / "assets" / "icons"
+_SVG_CACHE: dict = {}
+
+
+def _lucide_pixmap(name: str, size: int, color: str) -> QPixmap:
+    """Load a Lucide SVG from assets/icons and rasterize at `size` in `color`.
+
+    Lucide SVGs use stroke="currentColor". We substitute it with the requested
+    color before handing the raw bytes to QSvgRenderer, so the same SVG can
+    be tinted any color without extra assets.
+    """
+    cache_key = f"{name}:{color}"
+    svg_bytes = _SVG_CACHE.get(cache_key)
+    if svg_bytes is None:
+        path = _ICONS_DIR / f"{name}.svg"
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            return QPixmap(size, size)
+        svg_bytes = text.replace("currentColor", color).encode("utf-8")
+        _SVG_CACHE[cache_key] = svg_bytes
+    renderer = QSvgRenderer(svg_bytes)
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer.render(p)
+    p.end()
+    return pix
+
+
+# Sidebar icon name → Lucide SVG file name.
+_NAV_ICON_MAP = {
+    "home": "house",
+    "clock": "history",
+    "book": "book-open",
+    "gear": "settings",
+}
+
+
+def _nav_icon(name: str, color: str = "rgba(10, 10, 11, 0.62)", size: int = 18) -> QIcon:
+    svg_name = _NAV_ICON_MAP.get(name, name)
+    return QIcon(_lucide_pixmap(svg_name, size, color))
+
+
+def _key_chip(text: str) -> str:
+    """HTML snippet rendering a key as a thin-bordered keycap (no gray fill)."""
+    return (
+        f"<span style='border: 1px solid rgba(0,0,0,0.18); "
+        f"padding: 1px 7px; border-radius: 5px; "
+        f"font-family: \"JetBrains Mono\", \"Consolas\", monospace; "
+        f"font-size: 11px; font-weight: 600; color: {INK_2};'>"
+        f"{text}</span>"
+    )
+
+
+class _TipBanner(QFrame):
+    """Soft gradient banner with rotating usage tips. Pure decoration + nudge."""
+    TIPS = [
+        ("💡", "按住录音键说话，松开自动出字。任何输入框都能用。"),
+        ("🌐", "想翻译？按住录音键的同时再按翻译附加键，立刻翻成你设的语言。"),
+        ("🎯", "识别不准？打开「词典」加上专有名词，下次准多了。"),
+        ("🎤", "声音小？右上角「设置」→ 麦克风，换一个更近的麦。"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(96)
+        self.setStyleSheet("background: transparent;")
+        self._idx = 0
+        self._build_ui()
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._rotate)
+        self._timer.start(8000)
+
+    def _build_ui(self):
+        h = QHBoxLayout(self)
+        h.setContentsMargins(22, 18, 22, 18)
+        h.setSpacing(16)
+        self.icon_lbl = QLabel(self.TIPS[0][0])
+        self.icon_lbl.setStyleSheet(
+            f"font-size: 28px; background: rgba(255,255,255,0.6); "
+            f"border-radius: 14px; padding: 4px;"
+        )
+        self.icon_lbl.setFixedSize(48, 48)
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(self.icon_lbl)
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        self.title_lbl = QLabel("小贴士")
+        self.title_lbl.setStyleSheet(
+            f"font-size: 11px; color: {INK_3}; font-weight: 600; letter-spacing: 0.6px;"
+        )
+        text_col.addWidget(self.title_lbl)
+        self.tip_lbl = QLabel(self.TIPS[0][1])
+        self.tip_lbl.setStyleSheet(
+            f"font-size: 14px; color: {INK}; font-weight: 500;"
+        )
+        self.tip_lbl.setWordWrap(True)
+        text_col.addWidget(self.tip_lbl)
+        h.addLayout(text_col, 1)
+
+    def _rotate(self):
+        self._idx = (self._idx + 1) % len(self.TIPS)
+        icon, text = self.TIPS[self._idx]
+        self.icon_lbl.setText(icon)
+        self.tip_lbl.setText(text)
+        self.update()
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        grad = QLinearGradient(0, 0, float(rect.width()), float(rect.height()))
+        grad.setColorAt(0.0, QColor("#dbeafe"))
+        grad.setColorAt(0.55, QColor("#ede9fe"))
+        grad.setColorAt(1.0, QColor("#fce7f3"))
+        p.setBrush(QBrush(grad))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(rect, 16, 16)
+        p.end()
+
+
 # ---------- Pages ----------
 
 class HomePage(QWidget):
-    def __init__(self, engine: VoiceEngine, on_open_history):
+    def __init__(self, engine: VoiceEngine):
         super().__init__()
         self.engine = engine
-        self.on_open_history = on_open_history
         self.setStyleSheet(f"background: {CANVAS};")
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(28, 24, 28, 24)
-        outer.setSpacing(14)
+        outer.setContentsMargins(40, 36, 40, 28)
+        outer.setSpacing(22)
 
-        # Header
-        header = QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.addWidget(_h1("概览"))
-        header.addStretch()
+        # ---------- Hero ----------
+        hero_top = QHBoxLayout()
+        hero_top.setContentsMargins(0, 0, 0, 0)
         self.status_pill = _pill("● 就绪", "ok")
-        header.addWidget(self.status_pill)
-        outer.addLayout(header)
+        hero_top.addStretch()
+        hero_top.addWidget(self.status_pill)
+        outer.addLayout(hero_top)
 
-        # Shortcut hint
+        self.title_lbl = QLabel("说出来，写下来")
+        self.title_lbl.setStyleSheet(
+            f"font-size: 34px; font-weight: 700; color: {INK}; "
+            f"letter-spacing: -0.8px;"
+        )
+        outer.addWidget(self.title_lbl)
+
         self.shortcut_label = QLabel(self._shortcut_html())
-        self.shortcut_label.setStyleSheet(f"color: {INK_3}; font-size: 12px;")
+        self.shortcut_label.setStyleSheet(f"color: {INK_3}; font-size: 14px;")
         self.shortcut_label.setTextFormat(Qt.TextFormat.RichText)
+        self.shortcut_label.setWordWrap(True)
         outer.addWidget(self.shortcut_label)
 
-        # Provider cards row (2 columns).
-        providers = QHBoxLayout()
-        providers.setSpacing(12)
-        self.asr_card = ProviderCard("识别引擎", "SenseVoice 本地", "iic/SenseVoiceSmall", "ok", icon="mic")
-        self.llm_card = ProviderCard("AI 引擎", "Claude Haiku 4.5", "bltcy.ai / claude-haiku-4-5", "ok", icon="ai")
-        providers.addWidget(self.asr_card)
-        providers.addWidget(self.llm_card)
-        outer.addLayout(providers)
-
-        # Metric cards row (4 columns).
+        # ---------- 4 metric cards ----------
         metrics = QHBoxLayout()
-        metrics.setSpacing(12)
-        self.m_chars_today = MetricCard("今日字数", "0", "字", "")
-        self.m_duration_today = MetricCard("今日时长", "0", "秒", "")
-        self.m_total_chars = MetricCard("累计字数", "0", "字", "")
-        self.m_total_count = MetricCard("累计次数", "0", "次", "全部识别", accent=True)
-        for w in (self.m_chars_today, self.m_duration_today, self.m_total_chars, self.m_total_count):
+        metrics.setSpacing(14)
+        self.m_chars_today = MetricCard("今日字数", "0", "字", icon="edit")
+        self.m_total_chars = MetricCard("累计字数", "0", "字", icon="mic")
+        self.m_total_count = MetricCard("累计次数", "0", "次", icon="sparkle")
+        self.m_translate_count = MetricCard("翻译次数", "0", "次", icon="globe", accent=True)
+        for w in (self.m_chars_today, self.m_total_chars, self.m_total_count, self.m_translate_count):
             metrics.addWidget(w)
         outer.addLayout(metrics)
 
-        # Bottom: week chart + recent list.
-        bottom = QHBoxLayout()
-        bottom.setSpacing(12)
+        # ---------- Gradient tip banner ----------
+        outer.addWidget(_TipBanner())
 
-        self.week_card = Card(padding=18)
-        self.week_card.setMinimumHeight(220)
-        wl = self.week_card.inner()
-        wl_head = QHBoxLayout()
-        wl_head.addWidget(self._cap("近 7 天"))
-        wl_head.addStretch()
-        wl_head.addWidget(self._cap("次"))
-        wl.addLayout(wl_head)
-        wl.addSpacing(10)
-        self.week_chart = WeekChart()
-        wl.addWidget(self.week_chart, 1)
-
-        self.recent_card = Card(padding=0)
-        self.recent_card.setMinimumHeight(220)
-        rl = self.recent_card.inner()
-        rl_head = QHBoxLayout()
-        rl_head.setContentsMargins(18, 14, 18, 14)
-        rl_head.addWidget(self._cap("最近识别"))
-        rl_head.addStretch()
-        more_btn = QPushButton("查看全部 →")
-        more_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        more_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {BLUE}; "
-            f"border: none; font-size: 12px; padding: 0; }}"
-            f"QPushButton:hover {{ color: {BLUE_HOVER}; }}"
-        )
-        more_btn.clicked.connect(lambda: self.on_open_history())
-        rl_head.addWidget(more_btn)
-        rl.addLayout(rl_head)
-
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background: {LINE};")
-        rl.addWidget(sep)
-
-        self.recent_list = QVBoxLayout()
-        self.recent_list.setContentsMargins(0, 0, 0, 0)
-        self.recent_list.setSpacing(0)
-        recent_holder = QWidget()
-        recent_holder.setLayout(self.recent_list)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setWidget(recent_holder)
-        rl.addWidget(scroll, 1)
-
-        bottom.addWidget(self.week_card, 5)
-        bottom.addWidget(self.recent_card, 7)
-        outer.addLayout(bottom, 1)
+        outer.addStretch()
 
         self.refresh()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(2000)
 
-    def _cap(self, text: str) -> QLabel:
-        l = QLabel(text)
-        l.setStyleSheet(
-            f"font-size: 11px; color: {INK_3}; font-weight: 600; letter-spacing: 0.6px;"
-        )
-        return l
-
     def _shortcut_html(self) -> str:
         p = key_label(self.engine.polish_name)
         t = key_label(self.engine.translate_name)
-        kbd = lambda s: (
-            f"<span style='background:#f0f0f2;color:{INK};padding:2px 7px;"
-            f"border-radius:6px;font-size:11px;border:1px solid {LINE};font-weight:500;'>{s}</span>"
+        return (
+            f"按住 {_key_chip(p)} 录音并润色出字 　·　 "
+            f"按住 {_key_chip(p)}+{_key_chip(t)} 录音并翻译出字"
         )
-        return f"按住 {kbd(p)} 润色 　 按住 {kbd(p)}+{kbd(t)} 翻译"
 
     def refresh_shortcuts(self):
         self.shortcut_label.setText(self._shortcut_html())
@@ -320,29 +401,11 @@ class HomePage(QWidget):
         today_start = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
         today_entries = [h for h in history if h["created_at"] >= today_start]
         chars_today = sum(len(e["final"]) for e in today_entries)
-        duration_today = sum(e["duration_ms"] for e in today_entries) // 1000
 
         self.m_chars_today.set_value(str(chars_today))
-        self.m_duration_today.set_value(str(duration_today))
         self.m_total_chars.set_value(str(agg["total_chars"]))
         self.m_total_count.set_value(str(agg["recognize_count"]))
-
-        self.week_chart.set_data(stats.daily_counts(7))
-
-        # Rebuild recent list (latest 5).
-        while self.recent_list.count():
-            item = self.recent_list.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        if not history:
-            empty = QLabel("还没有识别记录,按住快捷键说话试试。")
-            empty.setStyleSheet(f"color: {INK_4}; font-size: 12px; padding: 24px 18px;")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.recent_list.addWidget(empty)
-        else:
-            for entry in history[:5]:
-                self.recent_list.addWidget(RecentRow(entry))
-            self.recent_list.addStretch(1)
+        self.m_translate_count.set_value(str(agg.get("translate_count", 0)))
 
     def set_status(self, state: str):
         if state == "recording":
@@ -372,155 +435,73 @@ class HomePage(QWidget):
         self.refresh()
 
 
-class ProviderCard(Card):
-    def __init__(self, kind: str, name: str, subname: str, status: str, icon: str = "mic"):
-        super().__init__(padding=16)
+class MetricCard(Card):
+    """Speakly-style stat card: round soft-blue icon block + big number + label."""
+    def __init__(self, label: str, value: str, unit: str, icon: str = "edit", accent: bool = False):
+        super().__init__(padding=26)
+        self.setMinimumHeight(140)
         h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(12)
-        # Icon block.
-        icon_label = QLabel()
-        pix = QPixmap(38, 38)
-        pix.fill(Qt.GlobalColor.transparent)
-        p = QPainter(pix)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setBrush(QColor(BLUE_SOFT))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(0, 0, 38, 38, 10, 10)
-        p.setBrush(QColor(BLUE))
-        if icon == "mic":
-            p.drawRoundedRect(15, 10, 8, 14, 4, 4)
-            pen = QPen(QColor(BLUE))
-            pen.setWidth(2)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            p.setPen(pen)
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawArc(11, 16, 16, 10, 0, -180 * 16)
-            p.drawLine(19, 26, 19, 30)
-        else:  # ai sparkle
-            p.drawEllipse(15, 8, 8, 8)
-            p.drawEllipse(11, 18, 6, 6)
-            p.drawEllipse(21, 20, 6, 6)
-        p.end()
-        icon_label.setPixmap(pix)
-        h.addWidget(icon_label)
+        h.setSpacing(18)
+
+        icon_box = QLabel()
+        icon_box.setFixedSize(52, 52)
+        icon_box.setStyleSheet("background: transparent;")
+        icon_box.setPixmap(self._draw_icon(icon))
+        h.addWidget(icon_box, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         right = QVBoxLayout()
-        right.setSpacing(2)
-        top = QHBoxLayout()
-        top.setSpacing(8)
-        kind_lbl = QLabel(kind)
-        kind_lbl.setStyleSheet(
-            f"font-size: 10px; color: {INK_4}; font-weight: 600; letter-spacing: 0.8px;"
+        right.setSpacing(4)
+        value_row = QHBoxLayout()
+        value_row.setContentsMargins(0, 0, 0, 0)
+        value_row.setSpacing(8)
+        self.value_lbl = QLabel(value)
+        self.value_lbl.setStyleSheet(
+            f"background: transparent; font-size: 36px; font-weight: 700; "
+            f"letter-spacing: -0.8px; color: {BLUE if accent else INK};"
         )
-        top.addWidget(kind_lbl)
-        if status == "ok":
-            top.addWidget(_pill("已配置", "ok"))
-        else:
-            top.addWidget(_pill("未配置", "default"))
-        top.addStretch()
-        right.addLayout(top)
-        name_lbl = QLabel(name)
-        name_lbl.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {INK};")
-        right.addWidget(name_lbl)
-        sub_lbl = QLabel(subname)
-        sub_lbl.setStyleSheet(f"font-size: 11px; color: {INK_3}; font-family: {MONO};")
-        right.addWidget(sub_lbl)
+        value_row.addWidget(self.value_lbl, alignment=Qt.AlignmentFlag.AlignBottom)
+        unit_lbl = QLabel(unit)
+        unit_lbl.setStyleSheet(
+            f"background: transparent; color: {INK_3}; font-size: 14px; font-weight: 500;"
+        )
+        value_row.addWidget(unit_lbl, alignment=Qt.AlignmentFlag.AlignBottom)
+        value_row.addStretch()
+        right.addLayout(value_row)
+        label_lbl = QLabel(label)
+        label_lbl.setStyleSheet(f"background: transparent; color: {INK_3}; font-size: 13px;")
+        right.addWidget(label_lbl)
         h.addLayout(right, 1)
         self.inner().addLayout(h)
 
+    # Metric card icon name → Lucide SVG file name.
+    _ICON_MAP = {
+        "edit": "pen-line",
+        "mic": "mic",
+        "sparkle": "sparkles",
+        "globe": "globe",
+    }
 
-class MetricCard(Card):
-    def __init__(self, label: str, value: str, unit: str, trend: str, accent: bool = False):
-        super().__init__(padding=16)
-        v = self.inner()
-        v.setSpacing(6)
-        head = QHBoxLayout()
-        head.setContentsMargins(0, 0, 0, 0)
-        head.setSpacing(6)
-        dot = QLabel()
-        dot.setFixedSize(8, 8)
-        dot.setStyleSheet(
-            f"background: {BLUE if accent else INK_5}; border-radius: 4px;"
-        )
-        head.addWidget(dot)
-        head.addWidget(_muted(label, 11))
-        head.addStretch()
-        v.addLayout(head)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        self.value_lbl = QLabel(value)
-        self.value_lbl.setStyleSheet(
-            f"font-size: 26px; font-weight: 600; letter-spacing: -0.5px; "
-            f"color: {BLUE if accent else INK};"
-        )
-        row.addWidget(self.value_lbl)
-        unit_lbl = QLabel(unit)
-        unit_lbl.setStyleSheet(f"color: {INK_4}; font-size: 11px;")
-        row.addWidget(unit_lbl, alignment=Qt.AlignmentFlag.AlignBottom)
-        row.addStretch()
-        v.addLayout(row)
-        trend_lbl = QLabel(trend or " ")
-        trend_lbl.setStyleSheet(f"color: {INK_4}; font-size: 11px;")
-        v.addWidget(trend_lbl)
+    def _draw_icon(self, name: str) -> QPixmap:
+        size = 52
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Soft blue rounded-square background.
+        p.setBrush(QColor(BLUE_SOFT))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(0, 0, size, size, 14, 14)
+        # Lucide SVG centered inside the background, sized at ~58% of the block.
+        icon_size = 28
+        svg = _lucide_pixmap(self._ICON_MAP.get(name, name), icon_size, BLUE)
+        offset = (size - icon_size) // 2
+        p.drawPixmap(offset, offset, svg)
+        p.end()
+        return pix
 
     def set_value(self, value: str):
         self.value_lbl.setText(value)
-
-
-class WeekChart(QWidget):
-    """7-day bar chart, today highlighted in blue."""
-    def __init__(self):
-        super().__init__()
-        self.data = [0] * 7
-        self.setMinimumHeight(130)
-
-    def set_data(self, data: list):
-        self.data = list(data)[-7:]
-        while len(self.data) < 7:
-            self.data.insert(0, 0)
-        self.update()
-
-    def paintEvent(self, ev):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w = self.width()
-        h = self.height() - 24  # leave space for day labels
-        if h < 20:
-            return
-        bar_count = 7
-        gap = 10
-        bar_w = (w - gap * (bar_count - 1)) / bar_count
-        max_v = max(self.data) if max(self.data) > 0 else 1
-        days = ["六前", "五前", "四前", "三前", "前天", "昨天", "今天"]
-        for i, v in enumerate(self.data):
-            x = i * (bar_w + gap)
-            bh = (v / max_v) * (h - 16) if max_v > 0 else 0
-            bh = max(3, bh)
-            is_today = i == bar_count - 1
-            color = QColor(BLUE) if is_today else QColor(INK)
-            p.setBrush(color)
-            p.setPen(Qt.PenStyle.NoPen)
-            if v == 0:
-                p.setOpacity(0.10)
-            else:
-                p.setOpacity(1.0 if is_today else 0.78)
-            p.drawRoundedRect(int(x), int(h - bh), int(bar_w), int(bh), 3, 3)
-            p.setOpacity(1.0)
-            # Count above bar.
-            p.setPen(QColor(BLUE if is_today else INK_3))
-            font = QFont(); font.setPointSize(8)
-            p.setFont(font)
-            p.drawText(int(x), int(h - bh - 12), int(bar_w), 12,
-                       Qt.AlignmentFlag.AlignCenter, str(v))
-            # Day label.
-            p.setPen(QColor(BLUE if is_today else INK_4))
-            font2 = QFont(); font2.setPointSize(8)
-            if is_today: font2.setBold(True)
-            p.setFont(font2)
-            p.drawText(int(x), self.height() - 16, int(bar_w), 14,
-                       Qt.AlignmentFlag.AlignCenter, days[i])
-        p.end()
 
 
 class RecentRow(QWidget):
@@ -659,12 +640,9 @@ class SettingsPage(QWidget):
         mi.addWidget(mic_section)
 
         self.mic_combo = QComboBox()
-        self.mic_combo.setStyleSheet(
-            "QComboBox { padding: 6px 12px; border: 1px solid rgba(0,0,0,0.12); "
-            "border-radius: 8px; background: white; font-size: 13px; min-width: 280px; }"
-            f"QComboBox:hover {{ border-color: {BLUE}; }}"
-        )
+        self.mic_combo.setMinimumWidth(320)
         self._populate_mic_combo()
+        _center_combo(self.mic_combo)
         self.mic_combo.currentIndexChanged.connect(self._on_mic_changed)
         mi.addWidget(self._row("使用的麦克风", self.mic_combo))
 
@@ -714,19 +692,23 @@ class SettingsPage(QWidget):
         ci.addWidget(self._row("翻译附加键（与录音键同时按=翻译）", self.translate_combo))
 
         self.mode_combo = QComboBox()
+        self.mode_combo.setMinimumWidth(220)
         self.mode_combo.addItem("按住说话 松开识别", "hold")
         self.mode_combo.addItem("点一下开始 再点一下结束", "toggle")
         self.mode_combo.setCurrentIndex(0 if engine.trigger_mode == "hold" else 1)
+        _center_combo(self.mode_combo)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         ci.addWidget(self._row("触发方式", self.mode_combo))
 
         self.lang_combo = QComboBox()
+        self.lang_combo.setMinimumWidth(220)
         for label, code in LANG_OPTIONS:
             self.lang_combo.addItem(label, code)
         for i in range(self.lang_combo.count()):
             if self.lang_combo.itemData(i) == engine.translate_target:
                 self.lang_combo.setCurrentIndex(i)
                 break
+        _center_combo(self.lang_combo)
         self.lang_combo.currentIndexChanged.connect(self._on_lang_changed)
         ci.addWidget(self._row("翻译目标语言", self.lang_combo, last=True))
 
@@ -740,31 +722,40 @@ class SettingsPage(QWidget):
         v.addStretch()
 
     def _row(self, label: str, widget: QWidget, last: bool = False) -> QWidget:
+        wrap = QWidget()
+        wv = QVBoxLayout(wrap)
+        wv.setContentsMargins(0, 0, 0, 0)
+        wv.setSpacing(0)
+
         row = QWidget()
-        border = "" if last else f"border-bottom: 1px solid {LINE};"
-        row.setStyleSheet(f"QWidget {{ {border} }}")
         h = QHBoxLayout(row)
-        h.setContentsMargins(18, 12, 18, 12)
+        h.setContentsMargins(20, 13, 20, 13)
         lbl = QLabel(label)
-        lbl.setStyleSheet(f"font-size: 13px; color: {INK};")
+        lbl.setStyleSheet(f"background: transparent; font-size: 13px; color: {INK};")
         h.addWidget(lbl)
         h.addStretch()
         h.addWidget(widget)
-        return row
+        wv.addWidget(row)
+
+        if not last:
+            sep = QFrame()
+            sep.setFixedHeight(1)
+            sep.setStyleSheet(
+                f"background: rgba(0, 0, 0, 0.07); margin-left: 20px; margin-right: 20px;"
+            )
+            wv.addWidget(sep)
+        return wrap
 
     def _make_key_combo(self, current: str) -> QComboBox:
         c = QComboBox()
+        c.setMinimumWidth(220)
         for label, code in KEY_OPTIONS:
             c.addItem(label, code)
         for i in range(c.count()):
             if c.itemData(i) == current:
                 c.setCurrentIndex(i)
                 break
-        c.setStyleSheet(
-            "QComboBox { padding: 6px 12px; border: 1px solid rgba(0,0,0,0.12); "
-            "border-radius: 8px; background: white; font-size: 13px; min-width: 200px; }"
-            f"QComboBox:hover {{ border-color: {BLUE}; }}"
-        )
+        _center_combo(c)
         return c
 
     def _on_polish_changed(self, idx):
@@ -812,6 +803,9 @@ class SettingsPage(QWidget):
                 if name == current or (current and current in name):
                     chosen_idx = i
             self.mic_combo.setCurrentIndex(chosen_idx)
+        # Re-apply center alignment to all popup items (cleared above).
+        for i in range(self.mic_combo.count()):
+            self.mic_combo.setItemData(i, Qt.AlignmentFlag.AlignCenter, Qt.ItemDataRole.TextAlignmentRole)
         self.mic_combo.blockSignals(False)
 
     def _on_mic_changed(self, idx):
@@ -877,22 +871,60 @@ class Sidebar(QWidget):
         v.addWidget(brand)
 
         self.list = QListWidget()
+        self.list.setIconSize(QSize(18, 18))
         self.list.setStyleSheet(
             "QListWidget { background: transparent; border: none; padding: 0 10px; outline: none; }"
-            f"QListWidget::item {{ color: {INK_2}; padding: 9px 14px; "
-            "border-radius: 8px; margin-bottom: 2px; font-size: 13px; font-weight: 500; }"
+            f"QListWidget::item {{ color: {INK_2}; padding: 10px 14px; "
+            "border-radius: 8px; margin-bottom: 3px; font-size: 13px; font-weight: 500; }"
             f"QListWidget::item:hover {{ background: {SURFACE_2}; }}"
             f"QListWidget::item:selected {{ background: {BLUE_SOFT}; "
             f"color: {BLUE}; font-weight: 600; }}"
         )
-        for name_text in ("概览", "历史记录", "词典", "设置"):
-            QListWidgetItem(name_text, self.list)
+        nav_items = [
+            ("概览", "home"),
+            ("历史记录", "clock"),
+            ("词典", "book"),
+            ("设置", "gear"),
+        ]
+        self._nav_keys = [k for _, k in nav_items]
+        for name_text, icon in nav_items:
+            item = QListWidgetItem(_nav_icon(icon, INK_3), name_text)
+            self.list.addItem(item)
         self.list.setCurrentRow(0)
+        self.list.currentRowChanged.connect(self._refresh_icons)
+        self._refresh_icons(0)
         v.addWidget(self.list, 1)
 
-        ver = QLabel(f"v0.5  ·  本地识别")
-        ver.setStyleSheet(f"color: {INK_5}; font-size: 11px; padding: 0 24px;")
-        v.addWidget(ver)
+    def _refresh_icons(self, current: int):
+        for i, key in enumerate(self._nav_keys):
+            color = BLUE if i == current else INK_3
+            self.list.item(i).setIcon(_nav_icon(key, color))
+
+
+class _StatusBar(QFrame):
+    """Hairline status bar at the bottom of the main window."""
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(34)
+        self.setStyleSheet(
+            f"background: {WHITE}; border-top: 1px solid {LINE};"
+        )
+        h = QHBoxLayout(self)
+        h.setContentsMargins(20, 0, 20, 0)
+        h.setSpacing(14)
+        version = QLabel(f"{BRAND_NAME} v0.6")
+        version.setStyleSheet(f"font-size: 11px; color: {INK_3}; font-weight: 500;")
+        h.addWidget(version)
+        sep = QLabel("·")
+        sep.setStyleSheet(f"font-size: 11px; color: {INK_5};")
+        h.addWidget(sep)
+        engine_l = QLabel("本地引擎 · 100% 离线")
+        engine_l.setStyleSheet(f"font-size: 11px; color: {INK_3};")
+        h.addWidget(engine_l)
+        h.addStretch()
+        self.right_lbl = QLabel("● 就绪")
+        self.right_lbl.setStyleSheet(f"font-size: 11px; color: {OK}; font-weight: 500;")
+        h.addWidget(self.right_lbl)
 
 
 class MainWindow(QMainWindow):
@@ -907,7 +939,12 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         self.setCentralWidget(central)
-        h = QHBoxLayout(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        body = QWidget()
+        h = QHBoxLayout(body)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
 
@@ -916,7 +953,7 @@ class MainWindow(QMainWindow):
 
         self.pages = QStackedWidget()
         self.history_page = HistoryPage()
-        self.home_page = HomePage(engine, on_open_history=lambda: self.sidebar.list.setCurrentRow(1))
+        self.home_page = HomePage(engine)
         self.dictionary_page = _PlaceholderPage(
             "词典",
             "自定义术语和专有名词,VoCo 会用它们提高识别准确度。",
@@ -925,6 +962,9 @@ class MainWindow(QMainWindow):
         for w in (self.home_page, self.history_page, self.dictionary_page, self.settings_page):
             self.pages.addWidget(w)
         h.addWidget(self.pages, 1)
+
+        root.addWidget(body, 1)
+        root.addWidget(_StatusBar())
 
         self.sidebar.list.currentRowChanged.connect(self.pages.setCurrentIndex)
 

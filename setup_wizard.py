@@ -130,11 +130,7 @@ class _MicPage(QWidget):
         v.addSpacing(10)
 
         self.mic_combo = QComboBox()
-        self.mic_combo.setStyleSheet(
-            "QComboBox { padding: 8px 12px; border: 1px solid rgba(0,0,0,0.12); "
-            "border-radius: 8px; background: white; font-size: 13px; min-width: 360px; }"
-            f"QComboBox:hover {{ border-color: {BLUE}; }}"
-        )
+        self.mic_combo.setMinimumWidth(360)
         v.addWidget(self.mic_combo)
 
         self.meter = _LevelMeter()
