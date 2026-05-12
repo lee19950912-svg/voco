@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whispr · 结果浮窗</title>
+<style>
+  :root {
+    --bg: oklch(99% 0.002 240);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(97% 0.003 250);
+    --border: oklch(92% 0.005 250);
+    --border-strong: oklch(86% 0.008 250);
+    --muted: oklch(54% 0.012 250);
+    --muted-2: oklch(70% 0.008 250);
+    --fg: oklch(18% 0.012 250);
+    --fg-soft: oklch(30% 0.012 250);
+    --accent: oklch(58% 0.18 255);
+    --accent-soft: oklch(96% 0.02 255);
+    --accent-soft-2: oklch(93% 0.04 255);
+    --success: oklch(60% 0.14 160);
+    --warning: oklch(75% 0.14 75);
+    --highlight: oklch(94% 0.08 100);
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--muted); text-decoration: none; font-size: 13px;
+  }
+  .back:hover { color: var(--fg); }
+  .screen-name {
+    font-family: var(--font-mono);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  }
+
+  .stage {
+    position: relative;
+    min-height: 720px;
+    margin: 32px;
+    border-radius: 18px;
+    overflow: hidden;
+    background:
+      radial-gradient(1000px 500px at 30% 10%, oklch(95% 0.02 250 / .6), transparent 60%),
+      radial-gradient(800px 400px at 80% 90%, oklch(96% 0.025 280 / .5), transparent 60%),
+      linear-gradient(135deg, oklch(94% 0.01 250), oklch(96% 0.008 240));
+    border: 1px solid var(--border);
+    padding: 48px;
+    display: flex; justify-content: center; align-items: flex-start;
+  }
+  .stage-label {
+    position: absolute; top: 16px; left: 16px;
+    font-family: var(--font-mono);
+    font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: oklch(35% 0.01 250 / .55);
+    background: oklch(100% 0 0 / .5); backdrop-filter: blur(8px);
+    padding: 4px 8px; border-radius: 4px;
+  }
+
+  /* The popup */
+  .popup {
+    width: 560px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid oklch(100% 0 0 / .9);
+    box-shadow:
+      0 30px 80px -20px oklch(20% 0.02 250 / .25),
+      0 16px 40px -16px oklch(15% 0.02 250 / .15),
+      0 1px 0 oklch(100% 0 0 / .6) inset;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  .pp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pp-head .mic-badge {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center;
+  }
+  .pp-head h2 {
+    font-family: var(--font-display);
+    font-size: 13px; font-weight: 600; margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .pp-head .duration {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .pp-head .lang-chip {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 11.5px; color: var(--muted);
+  }
+  .pp-head .pp-close {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: transparent; border: none;
+    color: var(--muted); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .pp-head .pp-close:hover { background: var(--surface-2); color: var(--fg); }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .tab {
+    appearance: none; border: none;
+    background: transparent;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 500;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.active {
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: 0 1px 3px oklch(20% 0.02 250 / .08), 0 0 0 1px var(--border);
+  }
+  .tab .tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px; padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--accent-soft); color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+
+  /* Content */
+  .pane {
+    padding: 18px 20px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .pane[hidden] { display: none; }
+  .pane p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--fg);
+  }
+  .pane .meta-row {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 10px;
+    color: var(--muted); font-size: 12px;
+  }
+  .pane .meta-row .dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--muted-2);
+  }
+
+  /* Diff highlight in polished tab */
+  .diff-added { background: oklch(92% 0.04 160 / .6); padding: 1px 2px; border-radius: 2px; }
+  .diff-removed { color: var(--muted); text-decoration: line-through; text-decoration-color: oklch(60% 0.08 25); }
+
+  /* Translate options */
+  .translate-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .translate-toolbar label {
+    font-size: 12px; color: var(--muted);
+  }
+  .lang-pick {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px; cursor: pointer;
+    color: var(--fg);
+  }
+  .lang-pick.active {
+    background: var(--accent-soft); color: var(--accent);
+    border-color: oklch(80% 0.08 255);
+  }
+
+  /* Action bar */
+  .actions {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+  }
+  .actions .grow { flex: 1; }
+  .btn {
+    appearance: none; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--fg);
+    padding: 7px 12px;
+    border-radius: 7px;
+    font-size: 12.5px; font-family: var(--font-body);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .12s ease;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.icon-only { padding: 7px 8px; }
+  .btn .kbd {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    padding: 1px 5px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: oklch(50% 0.18 255);
+    box-shadow: 0 1px 0 oklch(100% 0 0 / .2) inset, 0 1px 2px oklch(40% 0.18 255 / .3);
+  }
+  .btn-primary:hover { background: oklch(54% 0.20 255); }
+  .btn-primary .kbd {
+    background: oklch(100% 0 0 / .15);
+    color: oklch(100% 0 0 / .9);
+  }
+
+  /* Notes section */
+  .notes {
+    padding: 0 32px 64px;
+  }
+  .notes h3 {
+    margin: 32px 0 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .notes-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  @media (max-width: 880px) { .notes-grid { grid-template-columns: 1fr; } }
+  .note {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .note .nh {
+    font-family: var(--font-display);
+    font-size: 13.5px; font-weight: 600; margin-bottom: 4px;
+  }
+  .note p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="index.html">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    返回总览
+  </a>
+  <div class="screen-name">02 · Result Popup · Anchored near caret</div>
+</header>
+
+<div class="stage">
+  <div class="stage-label">在光标 / 录音条原位置上方淡入</div>
+
+  <div class="popup" role="dialog" aria-label="转录结果">
+    <div class="pp-head">
+      <span class="mic-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+        </svg>
+      </span>
+      <h2>刚刚说的</h2>
+      <span class="duration">0:14 · 32 字</span>
+      <span class="lang-chip">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9" opacity=".15"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        中文 → 英文
+      </span>
+      <button class="pp-close" aria-label="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="original">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        原文
+      </button>
+      <button class="tab active" role="tab" data-tab="polished">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>
+        润色
+        <span class="tag">默认</span>
+      </button>
+      <button class="tab" role="tab" data-tab="translated">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a14 14 0 010 20M12 2a14 14 0 000 20"/></svg>
+        翻译
+      </button>
+    </div>
+
+    <div class="pane" data-tab="original" hidden>
+      <p>呃，明天早上的会议能不能改到下午两点，因为我上午要去医院做个体检，可能要花两三个小时。</p>
+      <div class="meta-row">
+        <span>原始转写</span>
+        <span class="dot"></span>
+        <span>未修改</span>
+      </div>
+    </div>
+
+    <div class="pane" data-tab="polished">
+      <p>明天上午有体检安排，<span class="diff-added">大约需要两到三小时</span>。能否把会议<span class="diff-removed">改到</span><span class="diff-added">推迟至</span>下午两点？</p>
+      <div class="meta-row">
+        <span style="color: var(--accent); font-weight: 500;">已润色</span>
+        <span class="dot"></span>
+        <span>风格：商务正式</span>
+        <span class="dot"></span>
+        <span>GPT-4o · 0.9s</span>
+      </div>
+    </div>
+
+    <div class="pane" data-tab="translated" hidden>
+      <div class="translate-toolbar">
+        <label>翻译到：</label>
+        <span class="lang-pick active">English</span>
+        <span class="lang-pick">日本語</span>
+        <span class="lang-pick">한국어</span>
+        <span class="lang-pick">+</span>
+      </div>
+      <p>I have a medical check-up tomorrow morning that will take about two to three hours. Could we push the meeting back to 2 PM?</p>
+      <div class="meta-row">
+        <span style="color: var(--accent); font-weight: 500;">已翻译</span>
+        <span class="dot"></span>
+        <span>中文 → English</span>
+        <span class="dot"></span>
+        <span>GPT-4o · 1.1s</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn icon-only" title="重新生成">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="btn icon-only" title="编辑">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <span class="grow"></span>
+      <button class="btn">
+        复制 <span class="kbd">⌘C</span>
+      </button>
+      <button class="btn btn-primary">
+        粘贴到光标
+        <span class="kbd">⏎</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<section class="notes">
+  <h3>交互说明</h3>
+  <div class="notes-grid">
+    <div class="note">
+      <div class="nh">键盘优先</div>
+      <p>录音结束后浮窗立即聚焦。<kbd style="font-family:var(--font-mono);font-size:10.5px;background:var(--surface-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);">⏎</kbd> 直接粘贴到原应用，<kbd style="font-family:var(--font-mono);font-size:10.5px;background:var(--surface-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);">⌘C</kbd> 复制，<kbd style="font-family:var(--font-mono);font-size:10.5px;background:var(--surface-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);">ESC</kbd> 关闭。</p>
+    </div>
+    <div class="note">
+      <div class="nh">三个 Tab 并行</div>
+      <p>原文、润色、翻译共存。Tab 之间结果都保留，可来回切换对比，不用重新跑 AI。</p>
+    </div>
+    <div class="note">
+      <div class="nh">润色差异可视化</div>
+      <p>润色版用高亮显示新增词，删除线显示去掉的词，让用户一眼看出改了什么。</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      const id = t.dataset.tab;
+      document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+      document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.tab !== id);
+    });
+  });
+</script>
+</body>
+</html>

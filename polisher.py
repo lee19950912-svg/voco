@@ -3,11 +3,17 @@
 Mirrors recognizer.py — abstract base class plus concrete implementations
 so we can swap engines without touching the call site.
 
-Step 5 ships:
-- DeepSeek (official endpoint)
-- Relay / 中转站 (any OpenAI-compatible base_url, e.g. for Claude Haiku via 3rd-party relay)
+2026-05-12 商业化升级后的双客户端架构：
+- 润色：DeepSeek V4 Flash（中文专项 + 国内直连，主战场中国用户体验最佳）
+- 翻译：OpenAI gpt-4.1-mini（走中转站，韩语翻译质量好）
 
-Both are thin OpenAI-SDK wrappers — only base_url, model, and api_key differ.
+为什么拆两个客户端：
+- 不同任务最优模型不同（润色要中文语感、翻译要韩语精度）
+- 两家厂商挂一个不影响另一个（多家供应商容灾）
+- 中国用户主路径润色不依赖中转站（直连 DeepSeek 国内节点稳定）
+
+每个客户端仍然是 OpenAI-SDK 风格的 thin wrapper —
+只是 base_url、model、api_key 不同。
 """
 import os
 import re
@@ -125,31 +131,66 @@ class OpenAICompatiblePolisher(Polisher):
         return self._chat(_system_translate(target_lang), text)
 
 
-def make_polisher(config: dict) -> Polisher:
-    engine = config.get("polish_engine", "relay")
+class DualPolisher(Polisher):
+    """Holds two separate clients — one for polish, one for translate.
 
+    Each task routes to its dedicated model so we can pick the best engine per task
+    (DeepSeek 中文专项润色 + OpenAI 韩语翻译).
+    """
+    def __init__(self, polish_client: OpenAICompatiblePolisher, translate_client: OpenAICompatiblePolisher):
+        self._polish_client = polish_client
+        self._translate_client = translate_client
+
+    def polish(self, text: str) -> str:
+        return self._polish_client.polish(text)
+
+    def translate(self, text: str, target_lang: str) -> str:
+        return self._translate_client.translate(text, target_lang)
+
+
+def _build_client(engine: str, model: str, base_url: str, label: str) -> OpenAICompatiblePolisher:
+    """Resolve api_key + base_url defaults for a given engine name and build a client."""
     if engine == "deepseek":
         return OpenAICompatiblePolisher(
             api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            base_url="https://api.deepseek.com",
-            model=config.get("polish_model", "deepseek-chat"),
-            label="DeepSeek",
-        )
-
-    if engine == "relay":
-        return OpenAICompatiblePolisher(
-            api_key=os.getenv("RELAY_API_KEY", ""),
-            base_url=config.get("polish_base_url", ""),
-            model=config.get("polish_model", ""),
-            label="中转站",
+            base_url=base_url or "https://api.deepseek.com",
+            model=model or "deepseek-v4-flash",
+            label=f"DeepSeek({label})",
         )
 
     if engine == "openai":
         return OpenAICompatiblePolisher(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            base_url="https://api.openai.com/v1",
-            model=config.get("polish_model", "gpt-4o-mini"),
-            label="OpenAI",
+            base_url=base_url or "https://api.openai.com/v1",
+            model=model or "gpt-4.1-mini",
+            label=f"OpenAI({label})",
         )
 
-    raise ValueError(f"未知的 polish_engine: {engine}")
+    if engine == "relay":
+        return OpenAICompatiblePolisher(
+            api_key=os.getenv("RELAY_API_KEY", ""),
+            base_url=base_url,
+            model=model,
+            label=f"中转站({label})",
+        )
+
+    raise ValueError(f"未知 engine: {engine}（{label}）")
+
+
+def make_polisher(config: dict) -> Polisher:
+    """Build a DualPolisher from config — polish and translate use independent clients."""
+    polish_client = _build_client(
+        engine=config.get("polish_engine", "deepseek"),
+        model=config.get("polish_model", "deepseek-v4-flash"),
+        base_url=config.get("polish_base_url", ""),
+        label="润色",
+    )
+
+    translate_client = _build_client(
+        engine=config.get("translate_engine", "relay"),
+        model=config.get("translate_model", "gpt-4.1-mini"),
+        base_url=config.get("translate_base_url", "https://api.bltcy.ai/v1"),
+        label="翻译",
+    )
+
+    return DualPolisher(polish_client, translate_client)

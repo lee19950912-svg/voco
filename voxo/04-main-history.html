@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whispr · 历史记录</title>
+<style>
+  :root {
+    --bg: oklch(99% 0.002 240);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(97% 0.003 250);
+    --surface-3: oklch(94% 0.005 250);
+    --sidebar: oklch(98% 0.003 250);
+    --border: oklch(92% 0.005 250);
+    --border-strong: oklch(86% 0.008 250);
+    --muted: oklch(54% 0.012 250);
+    --muted-2: oklch(70% 0.008 250);
+    --fg: oklch(18% 0.012 250);
+    --fg-soft: oklch(30% 0.012 250);
+    --accent: oklch(58% 0.18 255);
+    --accent-soft: oklch(96% 0.02 255);
+    --accent-soft-2: oklch(93% 0.04 255);
+    --success: oklch(60% 0.14 160);
+    --warning: oklch(72% 0.15 75);
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(135deg, oklch(94% 0.01 250), oklch(96% 0.008 240));
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 32px;
+    background: oklch(100% 0 0 / .7);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--fg); }
+  .screen-name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+  .stage { padding: 32px; display: grid; place-items: center; }
+
+  /* Desktop window */
+  .window {
+    width: 1200px; max-width: 100%;
+    height: 780px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid oklch(100% 0 0 / .9);
+    overflow: hidden;
+    box-shadow:
+      0 30px 80px -20px oklch(15% 0.02 250 / .25),
+      0 16px 40px -16px oklch(15% 0.02 250 / .15);
+    display: grid;
+    grid-template-rows: 38px 1fr;
+  }
+  .titlebar {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    position: relative;
+  }
+  .lights { display: flex; gap: 6px; }
+  .lights i {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block;
+  }
+  .lights i:nth-child(1) { background: oklch(70% 0.18 25); }
+  .lights i:nth-child(2) { background: oklch(80% 0.15 80); }
+  .lights i:nth-child(3) { background: oklch(72% 0.16 145); }
+  .title {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    font-size: 12.5px; font-weight: 600;
+    color: var(--fg);
+    letter-spacing: -0.005em;
+  }
+
+  /* Main grid */
+  .body {
+    display: grid;
+    grid-template-columns: 220px 360px 1fr;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .sb-search {
+    padding: 14px 14px 8px;
+  }
+  .sb-search .field {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 5px 9px;
+  }
+  .sb-search .field input {
+    border: none; background: transparent; outline: none;
+    font: inherit; flex: 1; min-width: 0; color: var(--fg);
+  }
+  .sb-search .field input::placeholder { color: var(--muted-2); }
+  .sb-search .kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 1px 5px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+  .sb-group {
+    padding: 6px 0 8px;
+  }
+  .sb-label {
+    padding: 6px 16px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-2);
+    font-weight: 500;
+  }
+  .sb-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--fg-soft);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+  .sb-item:hover { background: oklch(95% 0.005 250 / .5); color: var(--fg); }
+  .sb-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+  .sb-item .icw { width: 14px; display: grid; place-items: center; flex-shrink: 0; }
+  .sb-item .count {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .sb-item.active .count { color: var(--accent); }
+  .sb-item .swatch {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+
+  .sb-footer {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sb-footer .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, oklch(70% 0.15 50), oklch(60% 0.18 30));
+    display: grid; place-items: center;
+    color: white;
+    font-size: 12px; font-weight: 600;
+  }
+  .sb-footer .who { flex: 1; min-width: 0; }
+  .sb-footer .n { font-size: 12.5px; font-weight: 500; }
+  .sb-footer .p {
+    font-size: 10.5px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .sb-footer .p .badge {
+    background: var(--accent-soft); color: var(--accent);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Middle list */
+  .list {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .list-head {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 1;
+  }
+  .list-head h1 {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    font-size: 18px; font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .list-head .filters {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--fg-soft);
+    cursor: pointer;
+  }
+  .chip:hover { background: var(--surface-3); }
+  .chip.active {
+    background: var(--accent-soft); color: var(--accent);
+    border-color: oklch(80% 0.08 255);
+  }
+  .chip.count-chip { font-family: var(--font-mono); font-size: 10.5px; }
+
+  .day-label {
+    padding: 14px 18px 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    background: var(--surface);
+    position: sticky; top: 76px;
+  }
+
+  .row {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row.selected {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding-left: 15px;
+  }
+  .row .r1 {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; color: var(--muted);
+  }
+  .row .r1 .time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .row .r1 .lang {
+    padding: 1px 5px;
+    background: var(--surface-3);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .row .r1 .lang.en { background: oklch(95% 0.04 255); color: var(--accent); }
+  .row .r1 .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted-2); }
+  .row .r1 .app {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin-left: auto;
+  }
+  .row .text {
+    font-size: 13px;
+    color: var(--fg);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .row .meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .row .meta .tag {
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10.5px;
+  }
+  .row .meta .tag.polished { background: oklch(94% 0.08 100); color: oklch(40% 0.15 80); }
+  .row .meta .tag.translated { background: oklch(94% 0.04 255); color: var(--accent); }
+
+  /* Detail pane */
+  .detail {
+    background: var(--surface);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .detail-head {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-head .crumbs {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .detail-head .crumbs .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted-2); }
+  .detail-head h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 19px; font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+  .detail-head .toolbar {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn {
+    appearance: none;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--fg);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.icon { padding: 5px 7px; }
+  .btn .kbd-mini {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 0 4px;
+    margin-left: 3px;
+  }
+  .btn-primary {
+    background: var(--accent); color: white;
+    border-color: oklch(50% 0.18 255);
+  }
+  .btn-primary:hover { background: oklch(54% 0.20 255); }
+
+  .detail-tabs {
+    display: flex; gap: 2px;
+    padding: 8px 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .dtab {
+    appearance: none; border: none; background: transparent;
+    padding: 8px 12px 9px;
+    font: inherit; font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: -1px;
+  }
+  .dtab:hover { color: var(--fg); }
+  .dtab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 500;
+  }
+  .dtab .tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 1px 5px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+  .dtab .lang-mini {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .pane {
+    padding: 22px 24px;
+  }
+  .pane[hidden] { display: none; }
+  .pane p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--fg);
+  }
+  .pane .diff-add { background: oklch(92% 0.04 160 / .55); padding: 1px 2px; border-radius: 2px; }
+  .pane .diff-rem { color: var(--muted); text-decoration: line-through; text-decoration-color: oklch(60% 0.08 25); }
+
+  .pane .key-meta {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .pane .km {
+    font-size: 12px;
+  }
+  .pane .km .l {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .pane .km .v { color: var(--fg); font-weight: 500; }
+  .pane .km .v.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="index.html">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    返回总览
+  </a>
+  <div class="screen-name">04 · Main Window · History</div>
+</header>
+
+<div class="stage">
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="title">Whispr — 历史记录</div>
+    </div>
+
+    <div class="body">
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sb-search">
+          <div class="field">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="oklch(60% 0.01 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input placeholder="搜索全部转录…" />
+            <span class="kbd">⌘K</span>
+          </div>
+        </div>
+
+        <div class="sb-group">
+          <div class="sb-label">收藏夹</div>
+          <div class="sb-item active">
+            <span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+            今天
+            <span class="count">47</span>
+          </div>
+          <div class="sb-item">
+            <span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+            本周
+            <span class="count">218</span>
+          </div>
+          <div class="sb-item">
+            <span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></span>
+            收藏
+            <span class="count">12</span>
+          </div>
+          <div class="sb-item">
+            <span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+            已导出
+            <span class="count">5</span>
+          </div>
+        </div>
+
+        <div class="sb-group">
+          <div class="sb-label">按语言</div>
+          <div class="sb-item">
+            <span class="swatch" style="background: oklch(60% 0.18 25);"></span>
+            中文
+            <span class="count">782</span>
+          </div>
+          <div class="sb-item">
+            <span class="swatch" style="background: var(--accent);"></span>
+            英文
+            <span class="count">196</span>
+          </div>
+          <div class="sb-item">
+            <span class="swatch" style="background: oklch(60% 0.18 145);"></span>
+            日文
+            <span class="count">34</span>
+          </div>
+        </div>
+
+        <div class="sb-group">
+          <div class="sb-label">按润色风格</div>
+          <div class="sb-item"><span class="icw"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></span>商务正式 <span class="count">412</span></div>
+          <div class="sb-item"><span class="icw"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></span>邮件 <span class="count">203</span></div>
+          <div class="sb-item"><span class="icw"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></span>聊天口语 <span class="count">288</span></div>
+        </div>
+
+        <div class="sb-footer">
+          <div class="avatar">李</div>
+          <div class="who">
+            <div class="n">李清</div>
+            <div class="p"><span class="badge">PRO</span> 12,847 字 / 月</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Middle list -->
+      <section class="list">
+        <div class="list-head">
+          <h1>今天 · 47 条转录</h1>
+          <div class="filters">
+            <span class="chip active">全部 <span class="count-chip">47</span></span>
+            <span class="chip">已润色 <span class="count-chip">31</span></span>
+            <span class="chip">已翻译 <span class="count-chip">14</span></span>
+            <span class="chip">未使用 <span class="count-chip">3</span></span>
+          </div>
+        </div>
+
+        <div class="day-label">14:00 — 现在</div>
+
+        <div class="row selected">
+          <div class="r1">
+            <span class="time">14:08</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>14 秒</span>
+            <span class="app">→ Slack</span>
+          </div>
+          <div class="text">明天上午有体检安排，大约需要两到三小时。能否把会议推迟至下午两点？</div>
+          <div class="meta">
+            <span class="tag polished">已润色</span>
+            <span class="tag">商务正式</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">13:52</span>
+            <span class="lang en">EN</span>
+            <span class="dot"></span>
+            <span>22 秒</span>
+            <span class="app">→ Gmail</span>
+          </div>
+          <div class="text">Can we push the deadline for the Q4 report back by two days? I want to incorporate the new conversion data before finalizing the recommendations.</div>
+          <div class="meta">
+            <span class="tag translated">中→英</span>
+            <span class="tag polished">邮件</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">13:41</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>9 秒</span>
+            <span class="app">→ VS Code</span>
+          </div>
+          <div class="text">这个组件需要支持暗色模式，并且要兼容移动端的触摸操作。</div>
+          <div class="meta">
+            <span class="tag polished">已润色</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">13:22</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>6 秒</span>
+            <span class="app">→ 飞书</span>
+          </div>
+          <div class="text">下午三点开会，讨论产品路线图。</div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">12:58</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>31 秒</span>
+            <span class="app">→ Notion</span>
+          </div>
+          <div class="text">今天的迭代周会上聊了一下用户反馈，主要集中在三个点：导出格式不够丰富、批量操作的入口太深、暗色模式下对比度偏低。</div>
+          <div class="meta">
+            <span class="tag polished">已润色</span>
+            <span class="tag">会议纪要</span>
+          </div>
+        </div>
+
+        <div class="day-label">11:00 — 12:00</div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">11:47</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>12 秒</span>
+            <span class="app">→ Cursor</span>
+          </div>
+          <div class="text">把这个 hook 改造成支持泛型的版本，并且要兼容现有的所有调用点。</div>
+          <div class="meta">
+            <span class="tag polished">已润色</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">11:33</span>
+            <span class="lang">中</span>
+            <span class="dot"></span>
+            <span>18 秒</span>
+            <span class="app">→ Linear</span>
+          </div>
+          <div class="text">这个 bug 是因为状态更新的顺序不对。需要把 setLoading 放在异步操作之前调用。</div>
+        </div>
+
+        <div class="row">
+          <div class="r1">
+            <span class="time">11:08</span>
+            <span class="lang en">EN</span>
+            <span class="dot"></span>
+            <span>8 秒</span>
+            <span class="app">→ GitHub</span>
+          </div>
+          <div class="text">Thanks for the PR — I left a few inline comments. Mostly nits, but the loading state needs a closer look.</div>
+          <div class="meta">
+            <span class="tag translated">中→英</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Detail pane -->
+      <section class="detail">
+        <div class="detail-head">
+          <div class="crumbs">
+            <span>今天</span>
+            <span class="dot"></span>
+            <span>14:08</span>
+            <span class="dot"></span>
+            <span>14 秒 · 32 字 · 已粘贴到 Slack</span>
+          </div>
+          <h2>明天上午有体检安排，大约需要两到三小时。能否把会议推迟至下午两点？</h2>
+          <div class="toolbar">
+            <button class="btn btn-primary">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制
+              <span class="kbd-mini">⌘C</span>
+            </button>
+            <button class="btn">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              重新润色
+            </button>
+            <button class="btn">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+              翻译
+            </button>
+            <button class="btn icon" title="收藏">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+            </button>
+            <button class="btn icon" title="导出">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="btn icon" title="删除" style="margin-left:auto;color:oklch(55% 0.18 25);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-tabs" role="tablist">
+          <button class="dtab" data-dtab="original">
+            原文
+            <span class="lang-mini">ZH</span>
+          </button>
+          <button class="dtab active" data-dtab="polished">
+            润色
+            <span class="tag">默认</span>
+          </button>
+          <button class="dtab" data-dtab="translated">
+            翻译
+            <span class="lang-mini">ZH → EN</span>
+          </button>
+        </div>
+
+        <div class="pane" data-dtab="original" hidden>
+          <p>呃，明天早上的会议能不能改到下午两点，因为我上午要去医院做个体检，可能要花两三个小时。</p>
+          <div class="key-meta">
+            <div class="km"><div class="l">时长</div><div class="v mono">0:14</div></div>
+            <div class="km"><div class="l">字数</div><div class="v mono">37</div></div>
+            <div class="km"><div class="l">识别引擎</div><div class="v">Whisper v3</div></div>
+            <div class="km"><div class="l">置信度</div><div class="v mono">98%</div></div>
+          </div>
+        </div>
+
+        <div class="pane" data-dtab="polished">
+          <p>明天上午有体检安排，<span class="diff-add">大约需要两到三小时</span>。能否把会议<span class="diff-rem">改到</span><span class="diff-add">推迟至</span>下午两点？</p>
+          <div class="key-meta">
+            <div class="km"><div class="l">润色风格</div><div class="v">商务正式</div></div>
+            <div class="km"><div class="l">字数</div><div class="v mono">32 (−5)</div></div>
+            <div class="km"><div class="l">AI 模型</div><div class="v">GPT-4o</div></div>
+            <div class="km"><div class="l">耗时</div><div class="v mono">0.9 s</div></div>
+          </div>
+        </div>
+
+        <div class="pane" data-dtab="translated" hidden>
+          <p>I have a medical check-up tomorrow morning that will take about two to three hours. Could we push the meeting back to 2 PM?</p>
+          <div class="key-meta">
+            <div class="km"><div class="l">目标语言</div><div class="v">English (US)</div></div>
+            <div class="km"><div class="l">字数</div><div class="v mono">24 words</div></div>
+            <div class="km"><div class="l">AI 模型</div><div class="v">GPT-4o</div></div>
+            <div class="km"><div class="l">耗时</div><div class="v mono">1.1 s</div></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.dtab').forEach(t => {
+    t.addEventListener('click', () => {
+      const id = t.dataset.dtab;
+      document.querySelectorAll('.dtab').forEach(x => x.classList.toggle('active', x === t));
+      document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.dtab !== id);
+    });
+  });
+  document.querySelectorAll('.row').forEach(r => {
+    r.addEventListener('click', () => {
+      document.querySelectorAll('.row').forEach(x => x.classList.toggle('selected', x === r));
+    });
+  });
+</script>
+
+</body>
+</html>

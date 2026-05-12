@@ -122,6 +122,11 @@ class VoiceEngine:
         self._modifier_was_held = False
         self._stream: Optional[sd.InputStream] = None
         self._listener: Optional[keyboard.Listener] = None
+        # Serialize the post-recording pipeline (ASR + polish + paste). Without
+        # this lock two quick-fire utterances would run concurrently and the
+        # faster one would paste first — so sentence 1 could appear after
+        # sentence 2 at the cursor.
+        self._processing_lock = threading.Lock()
 
     # ---------- Configuration ----------
 
@@ -247,28 +252,31 @@ class VoiceEngine:
         ).start()
 
     def _process_recording(self, mode: str, duration: float, chunks: list):
-        try:
-            audio = np.concatenate(chunks, axis=0)
-            sf.write(TEMP_WAV, audio, SAMPLE_RATE)
-            raw_text = self.recognizer.recognize(TEMP_WAV)
+        # Lock ensures recordings paste in the order the user spoke, even if
+        # ASR latency varies between calls.
+        with self._processing_lock:
+            try:
+                audio = np.concatenate(chunks, axis=0)
+                sf.write(TEMP_WAV, audio, SAMPLE_RATE)
+                raw_text = self.recognizer.recognize(TEMP_WAV)
 
-            final_text = raw_text
-            if mode == "polish" and self.polisher_ready:
-                try:
-                    final_text = self.polisher.polish(raw_text)
-                except Exception as e:
-                    self.on_error(f"润色失败: {e}")
-            elif mode == "translate" and self.polisher_ready:
-                try:
-                    final_text = self.polisher.translate(raw_text, self.translate_target)
-                except Exception as e:
-                    self.on_error(f"翻译失败: {e}")
+                final_text = raw_text
+                if mode == "polish" and self.polisher_ready:
+                    try:
+                        final_text = self.polisher.polish(raw_text)
+                    except Exception as e:
+                        self.on_error(f"润色失败: {e}")
+                elif mode == "translate" and self.polisher_ready:
+                    try:
+                        final_text = self.polisher.translate(raw_text, self.translate_target)
+                    except Exception as e:
+                        self.on_error(f"翻译失败: {e}")
 
-            self.on_result(mode, raw_text, final_text)
-            self._paste(final_text)
-            stats.record_session(mode, raw_text, final_text, self.translate_target, duration)
-        finally:
-            self.on_state_change("idle")
+                self.on_result(mode, raw_text, final_text)
+                self._paste(final_text)
+                stats.record_session(mode, raw_text, final_text, self.translate_target, duration)
+            finally:
+                self.on_state_change("idle")
 
     def _paste(self, text: str):
         if not text:
@@ -278,12 +286,12 @@ class VoiceEngine:
         except Exception:
             original = ""
         pyperclip.copy(text)
-        time.sleep(0.05)
+        time.sleep(0.03)  # let the new clipboard value settle before Ctrl+V
         self.kb_controller.press(Key.ctrl)
         self.kb_controller.press("v")
         self.kb_controller.release("v")
         self.kb_controller.release(Key.ctrl)
-        time.sleep(1.0)
+        time.sleep(0.2)  # give the target app time to consume the paste
         try:
             pyperclip.copy(original)
         except Exception:

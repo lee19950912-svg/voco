@@ -11,7 +11,7 @@ import soundfile as sf
 from pynput import keyboard
 from pynput.keyboard import Key
 from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar,
     QPushButton, QStackedWidget, QVBoxLayout, QWidget,
@@ -22,16 +22,24 @@ from voice_engine import (
 )
 
 # Reuse main_window's design tokens via duplication to avoid circular imports.
-INK = "#0a0a0b"
-INK_3 = "rgba(10, 10, 11, 0.62)"
-INK_4 = "rgba(10, 10, 11, 0.42)"
+# Keep these in sync with main_window.py — see voxo/DESIGN-NOTES.md.
+INK = "#1d2230"           # --fg
+INK_2 = "#353a4a"         # --fg-soft
+INK_3 = "#6e7484"         # --muted
+INK_4 = "#a3a8b3"         # --muted-2
 WHITE = "#ffffff"
-CANVAS = "#f7f7f8"
-LINE = "rgba(0, 0, 0, 0.08)"
-BLUE = "#2563eb"
-BLUE_HOVER = "#1d4ed8"
-OK = "#16a34a"
-ERR = "#dc2626"
+CANVAS = "#fbfbfc"        # --bg
+SURFACE = "#ffffff"
+SURFACE_2 = "#f4f5f7"
+LINE = "#e2e5ea"          # --border
+LINE_STRONG = "#cdd1d8"   # --border-strong
+BLUE = "#5b6bf0"          # --accent (blue-violet)
+BLUE_HOVER = "#4c5be0"
+BLUE_SOFT = "#eef0fd"
+OK = "#2ea778"
+ERR = "#d44a3a"
+
+MONO = "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace"
 
 TEST_WAV = "wizard_test.wav"
 TEST_DURATION = 3.0
@@ -47,7 +55,9 @@ class _Bridge(QObject):
 
 def _h1(text: str) -> QLabel:
     l = QLabel(text)
-    l.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {INK};")
+    l.setStyleSheet(
+        f"font-size: 24px; font-weight: 600; color: {INK}; letter-spacing: -0.015em;"
+    )
     return l
 
 
@@ -64,7 +74,7 @@ def _primary_btn(text: str) -> QPushButton:
         f"QPushButton {{ background: {BLUE}; color: white; border: none; "
         f"border-radius: 8px; padding: 10px 22px; font-size: 13px; font-weight: 600; }}"
         f"QPushButton:hover {{ background: {BLUE_HOVER}; }}"
-        f"QPushButton:disabled {{ background: rgba(37, 99, 235, 0.4); }}"
+        f"QPushButton:disabled {{ background: {BLUE_SOFT}; color: {INK_4}; }}"
     )
     return b
 
@@ -97,17 +107,32 @@ class _WelcomePage(QWidget):
     def __init__(self):
         super().__init__()
         v = QVBoxLayout(self)
-        v.setContentsMargins(40, 40, 40, 20)
-        v.setSpacing(14)
-        v.addStretch()
+        v.setContentsMargins(56, 48, 56, 32)
+        v.setSpacing(0)
+
+        ribbon = QLabel("第 1 步 · 共 4 步")
+        ribbon.setStyleSheet(
+            f"font-family: {MONO}; font-size: 11px; color: {BLUE}; "
+            f"letter-spacing: 0.08em; text-transform: uppercase;"
+        )
+        v.addWidget(ribbon)
+        v.addSpacing(12)
+
         title = QLabel("欢迎使用 VoCo")
-        title.setStyleSheet(f"font-size: 28px; font-weight: 700; color: {INK};")
+        title.setStyleSheet(
+            f"font-size: 28px; font-weight: 600; color: {INK}; letter-spacing: -0.02em;"
+        )
         v.addWidget(title)
-        v.addWidget(_muted("用声音编织文字。3 步完成设置，约 30 秒。"))
-        v.addSpacing(10)
-        v.addWidget(_muted("第 1 步 · 选一个能用的麦克风"))
-        v.addWidget(_muted("第 2 步 · 试一下说话快捷键"))
-        v.addWidget(_muted("第 3 步 · 开始使用"))
+        v.addSpacing(8)
+
+        lede = _muted(
+            "用声音敲字，按住快捷键说话，AI 帮你把口语润色成通顺的文字，"
+            "再一键贴到任何应用里。整套设置大约 30 秒。"
+        )
+        lede.setStyleSheet(f"font-size: 14.5px; color: {INK_3}; line-height: 1.55;")
+        lede.setMaximumWidth(480)
+        v.addWidget(lede)
+
         v.addStretch()
 
 
@@ -122,8 +147,16 @@ class _MicPage(QWidget):
         self._stop_test = threading.Event()
 
         v = QVBoxLayout(self)
-        v.setContentsMargins(40, 36, 40, 20)
-        v.setSpacing(12)
+        v.setContentsMargins(56, 40, 56, 20)
+        v.setSpacing(10)
+
+        ribbon = QLabel("第 2 步 · 共 4 步")
+        ribbon.setStyleSheet(
+            f"font-family: {MONO}; font-size: 11px; color: {BLUE}; "
+            f"letter-spacing: 0.08em; text-transform: uppercase;"
+        )
+        v.addWidget(ribbon)
+        v.addSpacing(8)
 
         v.addWidget(_h1("选一个能用的麦克风"))
         v.addWidget(_muted("对着麦说话，看蓝色音量条有没有跳。跳得越满越好。"))
@@ -352,11 +385,19 @@ class _HotkeyPage(QWidget):
         self._trigger_key_held = None
 
         v = QVBoxLayout(self)
-        v.setContentsMargins(40, 30, 40, 16)
+        v.setContentsMargins(56, 40, 56, 16)
         v.setSpacing(10)
 
         polish_key = key_label(engine.polish_name)
         mod_key = key_label(engine.translate_modifier_name)
+
+        ribbon = QLabel("第 3 步 · 共 4 步")
+        ribbon.setStyleSheet(
+            f"font-family: {MONO}; font-size: 11px; color: {BLUE}; "
+            f"letter-spacing: 0.08em; text-transform: uppercase;"
+        )
+        v.addWidget(ribbon)
+        v.addSpacing(6)
 
         v.addWidget(_h1("试一下说话快捷键"))
         v.addWidget(_muted("按住键说一句话（比如「今天天气真好」），松开看出字效果。"))
@@ -637,21 +678,159 @@ class _DonePage(QWidget):
     def __init__(self, polish_label: str, mod_label: str):
         super().__init__()
         v = QVBoxLayout(self)
-        v.setContentsMargins(40, 40, 40, 20)
-        v.setSpacing(12)
-        v.addStretch()
-        ok = QLabel("✓")
-        ok.setStyleSheet(f"font-size: 56px; color: {OK};")
-        ok.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        v.addWidget(ok)
+        v.setContentsMargins(56, 48, 56, 32)
+        v.setSpacing(0)
+
+        ribbon = QLabel("第 4 步 · 共 4 步")
+        ribbon.setStyleSheet(
+            f"font-family: {MONO}; font-size: 11px; color: {BLUE}; "
+            f"letter-spacing: 0.08em; text-transform: uppercase;"
+        )
+        v.addWidget(ribbon)
+        v.addSpacing(12)
+
         title = QLabel("准备好了")
-        title.setStyleSheet(f"font-size: 26px; font-weight: 700; color: {INK};")
+        title.setStyleSheet(
+            f"font-size: 28px; font-weight: 600; color: {INK}; letter-spacing: -0.02em;"
+        )
         v.addWidget(title)
-        v.addWidget(_muted(
-            f"用法提醒：把光标停在任何输入框，按住 {polish_label} 说话出字（润色），"
-            f"按住 {polish_label}+{mod_label} 说话翻译。"
-        ))
+        v.addSpacing(8)
+
+        lede = QLabel(
+            f"把光标停在任何输入框，按住 {polish_label} 说话就能出字（润色），"
+            f"按住 {polish_label} + {mod_label} 就能翻译。"
+        )
+        lede.setStyleSheet(f"font-size: 14.5px; color: {INK_3};")
+        lede.setWordWrap(True)
+        lede.setMaximumWidth(520)
+        v.addWidget(lede)
+
         v.addStretch()
+
+
+class _StepRail(QWidget):
+    """Left-side numbered step rail per design 09. Shows brand, 4 steps with
+    done/active/pending visuals, and a skip link at the bottom."""
+
+    skip_clicked = pyqtSignal()
+
+    STEPS = [
+        ("欢迎", "了解 VoCo 怎么用"),
+        ("选麦克风", "找一个能用的设备"),
+        ("试快捷键", "按住说话试一下"),
+        ("准备好了", "开始使用"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("StepRail")
+        self.setFixedWidth(260)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Soft accent-tinted gradient (the design uses a radial + linear blend;
+        # qlineargradient is close enough at this size).
+        self.setStyleSheet(
+            f"#StepRail {{ background: qlineargradient("
+            f"x1:0, y1:0, x2:0.6, y2:1, "
+            f"stop:0 {BLUE_SOFT}, stop:1 {SURFACE}); "
+            f"border-right: 1px solid {LINE}; }}"
+        )
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(24, 28, 24, 22)
+        v.setSpacing(0)
+
+        # Brand
+        brand = QWidget()
+        bh = QHBoxLayout(brand)
+        bh.setContentsMargins(0, 0, 0, 0)
+        bh.setSpacing(10)
+        logo = QLabel()
+        logo.setFixedSize(28, 28)
+        logo.setStyleSheet(
+            f"background: {BLUE}; border-radius: 8px;"
+        )
+        bh.addWidget(logo)
+        name = QLabel("VoCo")
+        name.setStyleSheet(
+            f"font-size: 15px; font-weight: 600; color: {INK}; letter-spacing: -0.005em;"
+        )
+        bh.addWidget(name)
+        bh.addStretch()
+        v.addWidget(brand)
+        v.addSpacing(32)
+
+        # Step rows
+        self._dots: list[QLabel] = []
+        self._titles: list[QLabel] = []
+        for i, (t1, t2) in enumerate(self.STEPS):
+            row = QWidget()
+            rh = QHBoxLayout(row)
+            rh.setContentsMargins(0, 4, 0, 4)
+            rh.setSpacing(12)
+
+            dot = QLabel(str(i + 1))
+            dot.setFixedSize(28, 28)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            rh.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
+
+            txt = QWidget()
+            tv = QVBoxLayout(txt)
+            tv.setContentsMargins(0, 3, 0, 0)
+            tv.setSpacing(2)
+            t1l = QLabel(t1)
+            t2l = QLabel(t2)
+            t2l.setStyleSheet(f"font-size: 11.5px; color: {INK_4};")
+            tv.addWidget(t1l)
+            tv.addWidget(t2l)
+            rh.addWidget(txt, 1)
+
+            v.addWidget(row)
+            self._dots.append(dot)
+            self._titles.append(t1l)
+
+        v.addStretch()
+
+        self.skip_btn = QPushButton("直接跳过 →")
+        self.skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.skip_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {INK_3}; "
+            f"border: none; font-size: 12px; padding: 6px; }} "
+            f"QPushButton:hover {{ color: {INK}; }}"
+        )
+        self.skip_btn.clicked.connect(self.skip_clicked.emit)
+        v.addWidget(self.skip_btn, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self.set_active(0)
+
+    def set_active(self, index: int):
+        for i, (dot, t1) in enumerate(zip(self._dots, self._titles)):
+            if i < index:
+                dot.setText("✓")
+                dot.setStyleSheet(
+                    f"background: {OK}; border: 2px solid {OK}; "
+                    f"border-radius: 14px; color: white; "
+                    f"font-size: 13px; font-weight: 700;"
+                )
+                t1.setStyleSheet(f"font-size: 13.5px; font-weight: 500; color: {INK};")
+            elif i == index:
+                dot.setText(str(i + 1))
+                dot.setStyleSheet(
+                    f"background: {BLUE}; border: 2px solid {BLUE}; "
+                    f"border-radius: 14px; color: white; "
+                    f"font-family: {MONO}; font-size: 12px; font-weight: 700;"
+                )
+                t1.setStyleSheet(f"font-size: 13.5px; font-weight: 600; color: {BLUE};")
+            else:
+                dot.setText(str(i + 1))
+                dot.setStyleSheet(
+                    f"background: {SURFACE}; border: 2px solid {LINE_STRONG}; "
+                    f"border-radius: 14px; color: {INK_3}; "
+                    f"font-family: {MONO}; font-size: 12px; font-weight: 500;"
+                )
+                t1.setStyleSheet(f"font-size: 13.5px; font-weight: 500; color: {INK_3};")
+
+    def set_skip_visible(self, visible: bool):
+        self.skip_btn.setVisible(visible)
 
 
 class SetupWizard(QDialog):
@@ -661,12 +840,23 @@ class SetupWizard(QDialog):
         self.bridge = _Bridge()
         self.setWindowTitle("VoCo 首次设置")
         self.setModal(True)
-        self.setFixedSize(560, 480)
-        self.setStyleSheet(f"QDialog {{ background: {WHITE}; }}")
+        self.setFixedSize(880, 600)
+        self.setStyleSheet(f"QDialog {{ background: {SURFACE}; }}")
 
-        root = QVBoxLayout(self)
+        root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        self.rail = _StepRail()
+        self.rail.skip_clicked.connect(self._on_skip)
+        root.addWidget(self.rail)
+
+        # Right side: page stack + bottom action bar.
+        right = QWidget()
+        right.setStyleSheet(f"background: {SURFACE};")
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(0, 0, 0, 0)
+        rv.setSpacing(0)
 
         self.stack = QStackedWidget()
         self.welcome = _WelcomePage()
@@ -678,22 +868,21 @@ class SetupWizard(QDialog):
         )
         for p in (self.welcome, self.mic, self.hotkey, self.done):
             self.stack.addWidget(p)
-        root.addWidget(self.stack, 1)
+        rv.addWidget(self.stack, 1)
 
-        # Bottom action bar.
+        # Bottom action bar — progress on left, back/next on right.
         bar = QFrame()
-        bar.setStyleSheet(f"background: {CANVAS}; border-top: 1px solid {LINE};")
-        bar.setFixedHeight(64)
+        bar.setStyleSheet(f"background: transparent; border-top: 1px solid {LINE};")
+        bar.setFixedHeight(72)
         h = QHBoxLayout(bar)
-        h.setContentsMargins(20, 12, 20, 12)
+        h.setContentsMargins(40, 18, 40, 18)
 
-        self.skip_btn = QPushButton("跳过设置")
-        self.skip_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {INK_4}; border: none; "
-            f"font-size: 12px; }} QPushButton:hover {{ color: {INK_3}; }}"
+        self.progress_lbl = QLabel("第 1 步 · 共 4 步")
+        self.progress_lbl.setStyleSheet(
+            f"font-family: {MONO}; font-size: 11px; color: {INK_3}; "
+            f"letter-spacing: 0.04em;"
         )
-        self.skip_btn.clicked.connect(self._on_skip)
-        h.addWidget(self.skip_btn)
+        h.addWidget(self.progress_lbl)
         h.addStretch()
 
         self.back_btn = _ghost_btn("上一步")
@@ -704,20 +893,27 @@ class SetupWizard(QDialog):
         self.next_btn.clicked.connect(self._on_next)
         h.addWidget(self.next_btn)
 
-        root.addWidget(bar)
+        rv.addWidget(bar)
+        root.addWidget(right, 1)
+
+        # Compatibility shim — old code references self.skip_btn.
+        self.skip_btn = self.rail.skip_btn
 
         self._refresh_buttons()
 
     def _refresh_buttons(self):
         i = self.stack.currentIndex()
-        self.back_btn.setVisible(i > 0 and i < 3)
+        last = self.stack.count() - 1
+        self.back_btn.setVisible(i > 0 and i < last)
         if i == 0:
             self.next_btn.setText("开始")
-        elif i == self.stack.count() - 1:
+        elif i == last:
             self.next_btn.setText("开始使用")
         else:
             self.next_btn.setText("下一步")
-        self.skip_btn.setVisible(i < self.stack.count() - 1)
+        self.rail.set_active(i)
+        self.rail.set_skip_visible(i < last)
+        self.progress_lbl.setText(f"第 {i + 1} 步 · 共 {last + 1} 步")
 
     def _on_back(self):
         if self.stack.currentIndex() > 0:

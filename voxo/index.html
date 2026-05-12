@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whispr · 界面总览</title>
+<style>
+  :root {
+    --bg: oklch(99% 0.002 240);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(97% 0.003 250);
+    --border: oklch(92% 0.005 250);
+    --border-strong: oklch(86% 0.008 250);
+    --muted: oklch(54% 0.012 250);
+    --muted-2: oklch(70% 0.008 250);
+    --fg: oklch(18% 0.012 250);
+    --fg-soft: oklch(30% 0.012 250);
+    --accent: oklch(58% 0.18 255);
+    --accent-soft: oklch(96% 0.02 255);
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+    --shadow-md: 0 4px 6px -1px rgba(15,23,42,.06), 0 2px 4px -2px rgba(15,23,42,.04);
+    --shadow-lg: 0 20px 40px -12px rgba(15,23,42,.12), 0 8px 16px -4px rgba(15,23,42,.06);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { max-width: 1200px; margin: 0 auto; padding: 64px 40px 96px; }
+  .topline {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 48px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-display);
+    font-weight: 600; font-size: 16px; letter-spacing: -0.01em;
+  }
+  .brand-dot {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), oklch(48% 0.22 280));
+    display: grid; place-items: center;
+    box-shadow: 0 2px 6px -1px oklch(58% 0.18 255 / .35);
+  }
+  .brand-dot svg { color: white; }
+  .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 44px;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+  .lede {
+    color: var(--muted);
+    font-size: 17px;
+    max-width: 640px;
+    margin: 0 0 8px;
+    line-height: 1.55;
+  }
+  .keyhint {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 24px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--fg);
+  }
+  .section-label {
+    margin-top: 64px;
+    margin-bottom: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 960px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-strong);
+  }
+  .thumb {
+    aspect-ratio: 16 / 10;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .thumb .frame {
+    position: absolute; inset: 16px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .thumb .tb {
+    height: 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 4px; padding-left: 8px;
+    background: var(--surface);
+  }
+  .thumb .tb i { width: 6px; height: 6px; border-radius: 50%; background: oklch(88% 0.005 250); display: inline-block; }
+  .thumb .body { flex: 1; padding: 8px; display: flex; gap: 6px; }
+  .thumb .body .sb { width: 30%; background: var(--surface-2); border-radius: 4px; }
+  .thumb .body .main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .thumb .body .main .row { height: 8px; border-radius: 3px; background: var(--surface-2); }
+  .thumb .body .main .row.short { width: 50%; }
+  .thumb .body .main .row.tall { height: 22px; }
+  .card-body { padding: 18px 20px 20px; }
+  .num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .card h3 {
+    margin: 6px 0 6px;
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .badge {
+    display: inline-block;
+    margin-top: 12px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .badge.core { background: var(--accent-soft); color: var(--accent); }
+
+  /* Custom thumbnail variations */
+  .thumb-pill { display: grid; place-items: end center; padding-bottom: 24px; }
+  .thumb-pill .pill {
+    width: 75%; height: 38px; border-radius: 999px;
+    background: oklch(18% 0.012 250);
+    display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  }
+  .thumb-pill .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .thumb-pill .pill .wave { flex: 1; display: flex; align-items: center; gap: 2px; }
+  .thumb-pill .pill .wave span { display: block; width: 2px; background: oklch(90% 0.005 250 / .5); border-radius: 1px; }
+
+  .thumb-popup { display: grid; place-items: center; }
+  .thumb-popup .pop {
+    width: 80%; height: 75%;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .thumb-popup .pop .line { height: 6px; background: var(--surface-2); border-radius: 3px; }
+  .thumb-popup .pop .line.w70 { width: 70%; }
+  .thumb-popup .pop .line.w50 { width: 50%; }
+  .thumb-popup .pop .btns { margin-top: auto; display: flex; gap: 4px; }
+  .thumb-popup .pop .btns i { height: 14px; flex: 1; border-radius: 4px; background: var(--surface-2); display: inline-block; }
+  .thumb-popup .pop .btns i.p { background: var(--accent); }
+
+  .thumb-menu { padding: 16px 0 0 16px; display: flex; justify-content: flex-end; padding-right: 16px; }
+  .thumb-menu .panel {
+    width: 60%; height: 80%;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-lg);
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .thumb-menu .panel .item { height: 8px; background: var(--surface-2); border-radius: 3px; }
+
+  .thumb-onboard { display: grid; place-items: center; }
+  .thumb-onboard .ill {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), oklch(48% 0.22 280));
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px -4px oklch(58% 0.18 255 / .35);
+  }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topline">
+    <div class="brand">
+      <span class="brand-dot">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+        </svg>
+      </span>
+      Whispr
+    </div>
+    <div class="meta">9 个界面 · 设计稿 v1</div>
+  </div>
+
+  <h1>语音输入 + AI 润色翻译<br/>的桌面工具</h1>
+  <p class="lede">按一下快捷键说话，文字自动出现并可一键润色或翻译。九个核心界面的设计稿，点击卡片进入预览。</p>
+  <div class="keyhint">
+    <kbd>⌥</kbd><kbd>Space</kbd>
+    <span>· 全局唤起录音条</span>
+  </div>
+
+  <div class="section-label">核心使用流程</div>
+  <div class="grid">
+
+    <a class="card" href="01-recording-pill.html">
+      <div class="thumb thumb-pill">
+        <div class="pill">
+          <span class="dot"></span>
+          <span class="wave">
+            <span style="height:6px"></span><span style="height:14px"></span><span style="height:10px"></span>
+            <span style="height:18px"></span><span style="height:8px"></span><span style="height:22px"></span>
+            <span style="height:12px"></span><span style="height:16px"></span><span style="height:6px"></span>
+            <span style="height:14px"></span><span style="height:20px"></span><span style="height:10px"></span>
+            <span style="height:8px"></span><span style="height:16px"></span><span style="height:12px"></span>
+          </span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">01</div>
+        <h3>浮窗录音条</h3>
+        <p>按快捷键弹出的小条，显示音波、状态、计时。屏幕底部停留，不打扰当前应用。</p>
+        <span class="badge core">日常高频</span>
+      </div>
+    </a>
+
+    <a class="card" href="02-result-popup.html">
+      <div class="thumb thumb-popup">
+        <div class="pop">
+          <div class="line"></div>
+          <div class="line w70"></div>
+          <div class="line w50"></div>
+          <div class="line"></div>
+          <div class="btns">
+            <i></i><i></i><i class="p"></i>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">02</div>
+        <h3>结果浮窗</h3>
+        <p>转好的文字 + 润色 / 翻译按钮 + 一键复制。同位置弹出，无缝衔接录音。</p>
+        <span class="badge core">日常高频</span>
+      </div>
+    </a>
+
+    <a class="card" href="03-menubar-popup.html">
+      <div class="thumb thumb-menu">
+        <div class="panel">
+          <div class="item"></div>
+          <div class="item" style="width:60%"></div>
+          <div class="item"></div>
+          <div class="item" style="width:75%"></div>
+          <div class="item"></div>
+          <div class="item" style="width:50%"></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">03</div>
+        <h3>菜单栏弹出层</h3>
+        <p>系统托盘点开的小面板：今日统计、最近转录、快捷开关、设置入口。</p>
+        <span class="badge core">日常高频</span>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="section-label">主窗口</div>
+  <div class="grid">
+
+    <a class="card" href="04-main-history.html">
+      <div class="thumb">
+        <div class="frame">
+          <div class="tb"><i></i><i></i><i></i></div>
+          <div class="body">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="row tall"></div>
+              <div class="row"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+              <div class="row short"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">04</div>
+        <h3>历史记录</h3>
+        <p>所有转录的历史列表，可搜索、过滤、复看、再次润色翻译。</p>
+        <span class="badge">主窗口</span>
+      </div>
+    </a>
+
+    <a class="card" href="05-settings-shortcuts.html">
+      <div class="thumb">
+        <div class="frame">
+          <div class="tb"><i></i><i></i><i></i></div>
+          <div class="body">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="row"></div>
+              <div class="row"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+              <div class="row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">05</div>
+        <h3>设置 · 快捷键</h3>
+        <p>录音、润色、翻译、复制粘贴的按键自定义。冲突检测。</p>
+        <span class="badge">设置</span>
+      </div>
+    </a>
+
+    <a class="card" href="06-settings-voice.html">
+      <div class="thumb">
+        <div class="frame">
+          <div class="tb"><i></i><i></i><i></i></div>
+          <div class="body">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="row tall"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+              <div class="row short"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">06</div>
+        <h3>设置 · 语音和语言</h3>
+        <p>麦克风设备、识别引擎、输入语言、音质检测。</p>
+        <span class="badge">设置</span>
+      </div>
+    </a>
+
+    <a class="card" href="07-settings-ai.html">
+      <div class="thumb">
+        <div class="frame">
+          <div class="tb"><i></i><i></i><i></i></div>
+          <div class="body">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="row"></div>
+              <div class="row tall"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">07</div>
+        <h3>设置 · AI 润色和翻译</h3>
+        <p>AI 模型选择、润色风格预设、翻译目标语言、自定义指令。</p>
+        <span class="badge">设置</span>
+      </div>
+    </a>
+
+    <a class="card" href="08-settings-general.html">
+      <div class="thumb">
+        <div class="frame">
+          <div class="tb"><i></i><i></i><i></i></div>
+          <div class="body">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="row"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+              <div class="row short"></div>
+              <div class="row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">08</div>
+        <h3>设置 · 通用</h3>
+        <p>开机自启、外观主题、账号、订阅、数据导入导出。</p>
+        <span class="badge">设置</span>
+      </div>
+    </a>
+
+    <a class="card" href="09-onboarding.html">
+      <div class="thumb thumb-onboard">
+        <div class="ill">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          </svg>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="num">09</div>
+        <h3>首次启动引导</h3>
+        <p>三步教用户：设快捷键 → 试录一段 → 完成。</p>
+        <span class="badge">引导</span>
+      </div>
+    </a>
+
+  </div>
+
+  <footer>
+    <span>Whispr · 设计稿</span>
+    <span>Modern Minimal · oklch(58% 0.18 255)</span>
+  </footer>
+</div>
+</body>
+</html>

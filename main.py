@@ -16,10 +16,10 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Keep running when window is closed; tray controls quit.
 
-    # Set a sensible global font so PingFang/Inter/YaHei pick automatically.
+    # Pure system font stack per voxo/DESIGN-NOTES.md — no third-party fonts.
     from PyQt6.QtGui import QFont
     font = QFont()
-    font.setFamilies(["Inter", "Segoe UI", "Microsoft YaHei", "PingFang SC", "sans-serif"])
+    font.setFamilies(["Segoe UI", "Microsoft YaHei", "PingFang SC", "system-ui", "sans-serif"])
     font.setPointSize(10)
     app.setFont(font)
 

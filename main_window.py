@@ -34,29 +34,32 @@ KEY_OPTIONS = [
 ]
 MODE_LABEL = {"polish": "润色", "translate": "翻译", "raw": "原文"}
 
-# OpenLess-inspired palette.
-INK = "#0a0a0b"
-INK_2 = "#2a2a2d"
-INK_3 = "rgba(10, 10, 11, 0.62)"
-INK_4 = "rgba(10, 10, 11, 0.42)"
-INK_5 = "rgba(10, 10, 11, 0.24)"
+# Design tokens — synced with voxo/DESIGN-NOTES.md (oklch → hex equivalents).
+INK = "#1d2230"           # --fg
+INK_2 = "#353a4a"         # --fg-soft
+INK_3 = "#6e7484"         # --muted
+INK_4 = "#a3a8b3"         # --muted-2
+INK_5 = "rgba(29, 34, 48, 0.24)"
 WHITE = "#ffffff"
-CANVAS = "#f7f7f8"
-SURFACE = "#ffffff"
-SURFACE_2 = "#fafafa"
-LINE = "rgba(0, 0, 0, 0.08)"
-LINE_SOFT = "rgba(0, 0, 0, 0.05)"
-BLUE = "#2563eb"
-BLUE_HOVER = "#1d4ed8"
-BLUE_SOFT = "#eff4ff"
-OK = "#16a34a"
-OK_SOFT = "#ecfdf5"
-WARN = "#d97706"
-ERR = "#dc2626"
-RECORDING = "#dc2626"
+CANVAS = "#fbfbfc"        # --bg
+SURFACE = "#ffffff"       # --surface
+SURFACE_2 = "#f4f5f7"     # --surface-2
+SURFACE_3 = "#e9ebef"     # --surface-3
+LINE = "#e2e5ea"          # --border
+LINE_STRONG = "#cdd1d8"   # --border-strong
+LINE_SOFT = "rgba(0, 0, 0, 0.04)"
+BLUE = "#5b6bf0"          # --accent (blue-violet)
+BLUE_HOVER = "#4c5be0"
+BLUE_SOFT = "#eef0fd"     # --accent-soft
+OK = "#2ea778"            # --success
+OK_SOFT = "#e9f7f0"
+WARN = "#d99a2e"          # --warning
+ERR = "#d44a3a"           # --danger
+RECORDING = "#d44a3a"
 
-FONT_FAMILY = "'Inter', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif"
-MONO = "'JetBrains Mono', 'Consolas', monospace"
+# Pure system font stack per design notes — no third-party fonts.
+FONT_FAMILY = "-apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif"
+MONO = "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace"
 
 
 class EngineBridge(QObject):
@@ -244,7 +247,7 @@ _NAV_ICON_MAP = {
 }
 
 
-def _nav_icon(name: str, color: str = "rgba(10, 10, 11, 0.62)", size: int = 18) -> QIcon:
+def _nav_icon(name: str, color: str = INK_3, size: int = 18) -> QIcon:
     svg_name = _NAV_ICON_MAP.get(name, name)
     return QIcon(_lucide_pixmap(svg_name, size, color))
 
@@ -971,6 +974,22 @@ class MainWindow(QMainWindow):
         bridge.state_changed.connect(self.home_page.set_status)
         bridge.result_ready.connect(self.home_page.show_result)
         bridge.error_occurred.connect(self._show_error)
+
+        # Floating HUD that floats at the bottom of the screen during recording.
+        # Created here (after MainWindow has a thread context) and driven by the
+        # same engine signals as the home-page status text.
+        from hud_widget import VoiceHUD
+        self.hud = VoiceHUD()
+        bridge.state_changed.connect(self._on_hud_state)
+        bridge.audio_level.connect(self.hud.set_audio_level)
+
+    def _on_hud_state(self, state: str):
+        if state == "recording":
+            self.hud.show_listening()
+        elif state == "processing":
+            self.hud.show_processing()
+        else:  # 'idle' or anything else → fade out
+            self.hud.hide_smooth()
 
     def _show_error(self, msg: str):
         print(f"[error] {msg}")

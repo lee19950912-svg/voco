@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whispr · 首次启动引导</title>
+<style>
+  :root {
+    --bg: oklch(99% 0.002 240); --surface: oklch(100% 0 0); --surface-2: oklch(97% 0.003 250);
+    --surface-3: oklch(94% 0.005 250);
+    --border: oklch(92% 0.005 250); --border-strong: oklch(86% 0.008 250);
+    --muted: oklch(54% 0.012 250); --muted-2: oklch(70% 0.008 250);
+    --fg: oklch(18% 0.012 250); --fg-soft: oklch(30% 0.012 250);
+    --accent: oklch(58% 0.18 255); --accent-soft: oklch(96% 0.02 255);
+    --accent-soft-2: oklch(93% 0.04 255);
+    --success: oklch(60% 0.14 160);
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: linear-gradient(135deg, oklch(94% 0.01 250), oklch(96% 0.008 240)); color: var(--fg); font-family: var(--font-body); font-size: 13.5px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 32px; background: oklch(100% 0 0 / .7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+  .back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--fg); }
+  .screen-name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+  .stage { padding: 32px; display: grid; place-items: center; }
+
+  .window {
+    width: 880px; max-width: 100%;
+    height: 600px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid oklch(100% 0 0 / .9);
+    overflow: hidden;
+    box-shadow: 0 30px 80px -20px oklch(15% 0.02 250 / .25), 0 16px 40px -16px oklch(15% 0.02 250 / .15);
+    display: grid;
+    grid-template-rows: 38px 1fr;
+  }
+  .titlebar { background: var(--surface-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; gap: 8px; position: relative; }
+  .lights { display: flex; gap: 6px; } .lights i { width: 12px; height: 12px; border-radius: 50%; }
+  .lights i:nth-child(1) { background: oklch(70% 0.18 25); } .lights i:nth-child(2) { background: oklch(80% 0.15 80); } .lights i:nth-child(3) { background: oklch(72% 0.16 145); }
+
+  .body { display: grid; grid-template-columns: 260px 1fr; overflow: hidden; }
+
+  /* Step rail */
+  .rail {
+    background:
+      radial-gradient(500px 300px at 0% 0%, oklch(94% 0.06 280 / .5), transparent 70%),
+      linear-gradient(160deg, var(--accent-soft), var(--surface));
+    border-right: 1px solid var(--border);
+    padding: 32px 24px;
+    display: flex; flex-direction: column;
+  }
+  .rail .brand {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 36px;
+  }
+  .rail .brand .logo {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), oklch(48% 0.22 280));
+    border-radius: 8px;
+    display: grid; place-items: center;
+    box-shadow: 0 4px 12px -2px oklch(58% 0.18 255 / .4);
+  }
+  .rail .brand .name {
+    font-family: var(--font-display);
+    font-size: 15px; font-weight: 600;
+  }
+
+  .steps {
+    display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+  }
+  .steps::before {
+    content: '';
+    position: absolute;
+    left: 14px; top: 18px; bottom: 18px;
+    width: 2px;
+    background: oklch(90% 0.02 255);
+    z-index: 0;
+  }
+  .step {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 6px 8px 6px 0;
+    position: relative;
+    z-index: 1;
+  }
+  .step .dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border-strong);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .step.done .dot {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+  }
+  .step.active .dot {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    box-shadow: 0 0 0 4px oklch(58% 0.18 255 / .15);
+  }
+  .step .label .t1 {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--fg);
+    margin-top: 4px;
+  }
+  .step:not(.active):not(.done) .label .t1 { color: var(--muted); }
+  .step.active .label .t1 { color: var(--accent); }
+  .step .label .t2 {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .skip {
+    margin-top: auto;
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    text-align: center;
+  }
+  .skip:hover { color: var(--fg); }
+
+  /* Main content */
+  .main {
+    padding: 48px 56px 32px;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .ribbon {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+  .lede {
+    margin: 0 0 28px;
+    color: var(--muted);
+    font-size: 14.5px;
+    line-height: 1.55;
+    max-width: 480px;
+  }
+
+  /* Shortcut chooser */
+  .shortcut-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .recorder {
+    background: var(--surface-2);
+    border: 1px dashed var(--border-strong);
+    border-radius: 10px;
+    padding: 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    cursor: pointer;
+  }
+  .recorder:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .recorder.recording {
+    border-color: oklch(70% 0.18 25);
+    border-style: solid;
+    background: oklch(96% 0.04 25 / .5);
+  }
+  .recorder .display {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .recorder .display kbd {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 7px;
+    color: var(--fg);
+    min-width: 50px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .recorder .display .plus {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .recorder .hint {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .recorder .hint b { color: var(--success); font-weight: 500; }
+
+  .alts {
+    margin-top: 16px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12.5px; color: var(--muted);
+  }
+  .alts .preset {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .alts .preset:hover { border-color: var(--accent); color: var(--accent); }
+  .alts .preset kbd {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 1px 4px;
+    background: var(--surface-2);
+    border-radius: 3px;
+  }
+
+  /* Footer nav */
+  .foot {
+    margin-top: auto;
+    padding-top: 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border);
+  }
+  .progress {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .progress b { color: var(--fg); font-weight: 500; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--fg);
+    padding: 9px 18px;
+    border-radius: 8px;
+    font: inherit; font-size: 13px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary {
+    background: var(--accent); color: white;
+    border-color: oklch(50% 0.18 255);
+    box-shadow: 0 1px 0 oklch(100% 0 0 / .2) inset, 0 2px 6px oklch(40% 0.18 255 / .25);
+  }
+  .btn-primary:hover { background: oklch(54% 0.20 255); }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn-ghost:hover { color: var(--fg); }
+
+  .checks {
+    margin-top: 18px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .check {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px;
+    color: var(--success);
+    background: oklch(95% 0.05 160 / .6);
+    border: 1px solid oklch(80% 0.08 160);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="index.html">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    返回总览
+  </a>
+  <div class="screen-name">09 · Onboarding · First Launch</div>
+</header>
+
+<div class="stage">
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="body">
+
+      <aside class="rail">
+        <div class="brand">
+          <div class="logo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </div>
+          <div class="name">Whispr</div>
+        </div>
+
+        <div class="steps">
+          <div class="step done">
+            <div class="dot">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="label">
+              <div class="t1">欢迎</div>
+              <div class="t2">了解 Whispr 怎么用</div>
+            </div>
+          </div>
+
+          <div class="step active">
+            <div class="dot">2</div>
+            <div class="label">
+              <div class="t1">设个快捷键</div>
+              <div class="t2">按这个键就开始说话</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="dot">3</div>
+            <div class="label">
+              <div class="t1">麦克风权限</div>
+              <div class="t2">系统会弹一次窗</div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="dot">4</div>
+            <div class="label">
+              <div class="t1">试录一段</div>
+              <div class="t2">说什么都可以</div>
+            </div>
+          </div>
+        </div>
+
+        <a class="skip" href="04-main-history.html">直接跳过 →</a>
+      </aside>
+
+      <main class="main">
+        <div class="ribbon">第 2 步 · 共 4 步</div>
+        <h1>挑一个顺手的<br/>快捷键</h1>
+        <p class="lede">按住这个键你就可以说话，松开后 AI 就帮你润色完粘到剪贴板。我们推荐 <kbd style="font-family:var(--font-mono);font-size:11.5px;padding:1px 5px;background:var(--surface-2);border:1px solid var(--border);border-radius:3px;">⌥</kbd>+<kbd style="font-family:var(--font-mono);font-size:11.5px;padding:1px 5px;background:var(--surface-2);border:1px solid var(--border);border-radius:3px;">Space</kbd>，单手就能按。</p>
+
+        <div class="shortcut-card">
+          <div class="recorder">
+            <div class="display">
+              <kbd>⌥</kbd>
+              <span class="plus">+</span>
+              <kbd>Space</kbd>
+            </div>
+            <div class="hint"><b>✓ 已设置</b> · 点这里可以改成别的</div>
+          </div>
+
+          <div class="alts">
+            <span>常用选择：</span>
+            <span class="preset"><kbd>⌥</kbd><kbd>Space</kbd></span>
+            <span class="preset"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd></span>
+            <span class="preset"><kbd>F5</kbd></span>
+            <span class="preset"><kbd>fn</kbd></span>
+          </div>
+        </div>
+
+        <div class="checks">
+          <span class="check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            没有和系统快捷键冲突
+          </span>
+          <span class="check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            在任何应用中都可触发
+          </span>
+        </div>
+
+        <div class="foot">
+          <div class="progress">完成 <b>1</b> / 4</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost">上一步</button>
+            <button class="btn btn-primary">
+              继续
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+      </main>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

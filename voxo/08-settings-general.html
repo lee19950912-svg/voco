@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whispr · 设置 · 通用</title>
+<style>
+  :root {
+    --bg: oklch(99% 0.002 240); --surface: oklch(100% 0 0); --surface-2: oklch(97% 0.003 250);
+    --surface-3: oklch(94% 0.005 250); --sidebar: oklch(98% 0.003 250);
+    --border: oklch(92% 0.005 250); --border-strong: oklch(86% 0.008 250);
+    --muted: oklch(54% 0.012 250); --muted-2: oklch(70% 0.008 250);
+    --fg: oklch(18% 0.012 250); --fg-soft: oklch(30% 0.012 250);
+    --accent: oklch(58% 0.18 255); --accent-soft: oklch(96% 0.02 255);
+    --success: oklch(60% 0.14 160); --warning: oklch(72% 0.15 75); --danger: oklch(60% 0.20 25);
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: linear-gradient(135deg, oklch(94% 0.01 250), oklch(96% 0.008 240)); color: var(--fg); font-family: var(--font-body); font-size: 13.5px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 32px; background: oklch(100% 0 0 / .7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
+  .back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; }
+  .back:hover { color: var(--fg); }
+  .screen-name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+  .stage { padding: 32px; display: grid; place-items: center; }
+  .window { width: 960px; max-width: 100%; height: 720px; background: var(--surface); border-radius: 14px; border: 1px solid oklch(100% 0 0 / .9); overflow: hidden; box-shadow: 0 30px 80px -20px oklch(15% 0.02 250 / .25), 0 16px 40px -16px oklch(15% 0.02 250 / .15); display: grid; grid-template-rows: 38px 1fr; }
+  .titlebar { background: var(--surface-2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; gap: 8px; position: relative; }
+  .lights { display: flex; gap: 6px; } .lights i { width: 12px; height: 12px; border-radius: 50%; }
+  .lights i:nth-child(1) { background: oklch(70% 0.18 25); } .lights i:nth-child(2) { background: oklch(80% 0.15 80); } .lights i:nth-child(3) { background: oklch(72% 0.16 145); }
+  .title { position: absolute; left: 50%; transform: translateX(-50%); font-size: 12.5px; font-weight: 600; }
+  .body { display: grid; grid-template-columns: 220px 1fr; overflow: hidden; }
+
+  .sidebar { background: var(--sidebar); border-right: 1px solid var(--border); padding: 20px 8px; overflow-y: auto; }
+  .nav-label { padding: 8px 12px 6px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-2); font-weight: 500; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 7px; font-size: 13px; color: var(--fg-soft); cursor: pointer; margin: 1px 0; text-decoration: none; }
+  .nav-item:hover { background: oklch(95% 0.005 250 / .6); color: var(--fg); }
+  .nav-item.active { background: var(--surface); color: var(--fg); font-weight: 500; box-shadow: 0 1px 2px oklch(15% 0.02 250 / .05), 0 0 0 1px var(--border); }
+  .nav-item .icw { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); flex-shrink: 0; }
+  .nav-item.active .icw { color: var(--accent); }
+
+  .main { overflow-y: auto; padding: 32px 40px; }
+  .pg-head { margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .pg-head h1 { margin: 0 0 4px; font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.015em; }
+  .pg-head p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+  .section { margin-bottom: 32px; }
+  .section h2 { margin: 0 0 4px; font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .section .desc { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+
+  /* Account card */
+  .account {
+    background:
+      radial-gradient(600px 300px at 90% 0%, oklch(94% 0.06 280 / .7), transparent 70%),
+      linear-gradient(135deg, var(--accent-soft), var(--surface));
+    border: 1px solid oklch(85% 0.04 255);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: center;
+  }
+  .account .avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, oklch(70% 0.15 50), oklch(60% 0.18 30));
+    display: grid; place-items: center;
+    color: white;
+    font-size: 22px; font-weight: 600;
+    font-family: var(--font-display);
+  }
+  .account .who h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 16px; font-weight: 600;
+  }
+  .account .who .email {
+    font-size: 12.5px; color: var(--muted);
+    margin-top: 2px;
+  }
+  .account .who .badges {
+    margin-top: 10px;
+    display: flex; gap: 6px;
+  }
+  .account .badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: oklch(100% 0 0);
+    color: var(--accent);
+    border: 1px solid oklch(85% 0.06 255);
+    font-weight: 500;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .account .badge.muted { color: var(--muted); border-color: var(--border); }
+  .account .actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .account .actions .btn { font-size: 12.5px; }
+
+  .usage {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid oklch(85% 0.04 255 / .6);
+    grid-column: 1 / -1;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .usage .item .l {
+    font-family: var(--font-mono);
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .usage .item .v {
+    font-family: var(--font-display);
+    font-size: 18px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .usage .item .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .usage .item .bar {
+    margin-top: 6px;
+    height: 4px;
+    background: oklch(90% 0.02 250 / .7);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .usage .item .bar .fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  /* Field rows */
+  .field-row { display: grid; grid-template-columns: 220px 1fr; align-items: start; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .field-row:last-child { border-bottom: none; }
+  .field-row .lbl .l1 { font-size: 13.5px; font-weight: 500; }
+  .field-row .lbl .l2 { color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.5; }
+
+  .toggle { position: relative; width: 36px; height: 20px; background: var(--surface-3); border-radius: 999px; cursor: pointer; transition: background .12s; }
+  .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; box-shadow: 0 1px 2px oklch(15% 0.02 250 / .25); transition: left .12s; }
+  .toggle.on { background: var(--accent); } .toggle.on::after { left: 18px; }
+
+  .select { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 7px; cursor: pointer; font-size: 13px; min-width: 160px; }
+  .select .chev { color: var(--muted); }
+
+  /* Theme picker */
+  .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 460px; }
+  .theme-card {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .theme-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px oklch(58% 0.18 255 / .12);
+  }
+  .theme-preview {
+    height: 70px;
+    background: var(--surface-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .theme-preview .pp {
+    position: absolute;
+    inset: 8px;
+    border-radius: 6px;
+    border: 1px solid oklch(85% 0.005 250);
+    display: flex; flex-direction: column;
+  }
+  .theme-preview .pp .h { height: 12px; background: var(--surface); border-bottom: 1px solid oklch(85% 0.005 250); display: flex; align-items: center; padding: 0 4px; gap: 2px; }
+  .theme-preview .pp .h i { width: 4px; height: 4px; border-radius: 50%; background: oklch(85% 0.005 250); }
+  .theme-preview .pp .b { flex: 1; padding: 6px; display: flex; gap: 4px; }
+  .theme-preview .pp .b .s { width: 30%; background: oklch(96% 0.005 250); }
+  .theme-preview .pp .b .m { flex: 1; background: var(--surface); }
+  .theme-card.dark .theme-preview { background: oklch(20% 0.012 250); }
+  .theme-card.dark .theme-preview .pp { border-color: oklch(35% 0.015 250); }
+  .theme-card.dark .theme-preview .pp .h { background: oklch(22% 0.012 250); border-color: oklch(35% 0.015 250); }
+  .theme-card.dark .theme-preview .pp .h i { background: oklch(35% 0.015 250); }
+  .theme-card.dark .theme-preview .pp .b .s { background: oklch(22% 0.012 250); }
+  .theme-card.dark .theme-preview .pp .b .m { background: oklch(25% 0.012 250); }
+  .theme-card.auto .theme-preview { background: linear-gradient(135deg, var(--surface-2) 50%, oklch(20% 0.012 250) 50%); }
+  .theme-card.auto .theme-preview .pp { display: none; }
+  .theme-card .label { padding: 8px 12px; font-size: 12.5px; font-weight: 500; text-align: center; }
+
+  /* Accent picker */
+  .accent-pick { display: flex; gap: 8px; }
+  .accent-swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .accent-swatch.active { box-shadow: 0 0 0 2px var(--accent); }
+  .accent-swatch::after {
+    content: '';
+    position: absolute; inset: 0; border-radius: 50%;
+    background: var(--c);
+  }
+
+  .danger-zone {
+    border: 1px solid oklch(85% 0.08 25);
+    background: oklch(98% 0.02 25 / .5);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .danger-zone .row { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
+  .danger-zone .row + .row { border-top: 1px solid oklch(90% 0.05 25); }
+  .danger-zone .info { flex: 1; }
+  .danger-zone .info .t1 { font-size: 13px; font-weight: 500; }
+  .danger-zone .info .t2 { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .btn { appearance: none; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--accent); color: white; border-color: oklch(50% 0.18 255); }
+  .btn-primary:hover { background: oklch(54% 0.20 255); }
+  .btn-danger { color: var(--danger); border-color: oklch(80% 0.12 25); background: white; }
+  .btn-danger:hover { background: oklch(96% 0.04 25); }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+
+  .about {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .about .logo {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), oklch(48% 0.22 280));
+    border-radius: 10px;
+    display: grid; place-items: center;
+    box-shadow: 0 4px 12px -2px oklch(58% 0.18 255 / .4);
+  }
+  .about .info .n { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+  .about .info .v {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--muted);
+    margin-top: 2px;
+  }
+  .about .info .v .up { color: var(--success); }
+  .about .links { margin-left: auto; display: flex; gap: 14px; font-size: 12px; }
+  .about .links a { color: var(--muted); text-decoration: none; }
+  .about .links a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="index.html">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    返回总览
+  </a>
+  <div class="screen-name">08 · Settings · General</div>
+</header>
+
+<div class="stage">
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="title">Whispr — 设置</div>
+    </div>
+
+    <div class="body">
+      <aside class="sidebar">
+        <div class="nav-label">使用偏好</div>
+        <a class="nav-item" href="05-settings-shortcuts.html"><span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/></svg></span>快捷键</a>
+        <a class="nav-item" href="06-settings-voice.html"><span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/></svg></span>语音和语言</a>
+        <a class="nav-item" href="07-settings-ai.html"><span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg></span>AI 润色和翻译</a>
+        <a class="nav-item active" href="08-settings-general.html"><span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>通用</a>
+        <div class="nav-label" style="margin-top: 16px;">关于</div>
+        <a class="nav-item" href="04-main-history.html"><span class="icw"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg></span>历史记录</a>
+      </aside>
+
+      <main class="main">
+        <div class="pg-head">
+          <h1>通用</h1>
+          <p>账号、外观、启动、数据和隐私。</p>
+        </div>
+
+        <!-- Account -->
+        <div class="section">
+          <h2>账号</h2>
+          <div class="desc">订阅状态和本月使用量。</div>
+          <div class="account">
+            <div class="avatar">李</div>
+            <div class="who">
+              <h3>李清</h3>
+              <div class="email">lee19950912@gmail.com</div>
+              <div class="badges">
+                <span class="badge">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+                  PRO 会员
+                </span>
+                <span class="badge muted">续费时间 2026-08-15</span>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary">管理订阅</button>
+            </div>
+
+            <div class="usage">
+              <div class="item">
+                <div class="l">本月 AI 调用</div>
+                <div class="v">847 <small>/ 2000</small></div>
+                <div class="bar"><div class="fill" style="width: 42%"></div></div>
+              </div>
+              <div class="item">
+                <div class="l">已转写字数</div>
+                <div class="v">12,847 <small>字</small></div>
+                <div class="bar"><div class="fill" style="width: 28%"></div></div>
+              </div>
+              <div class="item">
+                <div class="l">节省时间（估算）</div>
+                <div class="v">4.8 <small>小时</small></div>
+                <div class="bar"><div class="fill" style="width: 60%; background: var(--success);"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Startup -->
+        <div class="section">
+          <h2>启动和窗口</h2>
+          <div class="desc">Whispr 在系统里怎么待着。</div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">开机自动启动</div>
+              <div class="l2">登录系统后自动在后台运行，菜单栏出现图标。</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="toggle on"></div>
+              <span style="font-size:12.5px;">开启</span>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">点关闭按钮时</div>
+              <div class="l2">主窗口的红色按钮。</div>
+            </div>
+            <div class="select">
+              <span>隐藏到菜单栏（不退出）</span>
+              <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">在 Dock 显示图标</div>
+              <div class="l2">关闭后只在菜单栏显示，Dock 里不留位置。</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="toggle"></div>
+              <span style="font-size:12.5px; color: var(--muted);">关闭</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="section">
+          <h2>外观</h2>
+          <div class="desc">主题和强调色。</div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">主题</div>
+              <div class="l2">"跟随系统"会根据 macOS 当前的浅 / 深色切换。</div>
+            </div>
+            <div class="theme-grid">
+              <div class="theme-card active">
+                <div class="theme-preview">
+                  <div class="pp">
+                    <div class="h"><i></i><i></i><i></i></div>
+                    <div class="b"><div class="s"></div><div class="m"></div></div>
+                  </div>
+                </div>
+                <div class="label">浅色</div>
+              </div>
+              <div class="theme-card dark">
+                <div class="theme-preview">
+                  <div class="pp">
+                    <div class="h"><i></i><i></i><i></i></div>
+                    <div class="b"><div class="s"></div><div class="m"></div></div>
+                  </div>
+                </div>
+                <div class="label">深色</div>
+              </div>
+              <div class="theme-card auto">
+                <div class="theme-preview"></div>
+                <div class="label">跟随系统</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">强调色</div>
+              <div class="l2">用于按钮、链接、录音指示等。</div>
+            </div>
+            <div class="accent-pick">
+              <span class="accent-swatch active" style="--c: oklch(58% 0.18 255);"></span>
+              <span class="accent-swatch" style="--c: oklch(60% 0.18 145);"></span>
+              <span class="accent-swatch" style="--c: oklch(62% 0.20 25);"></span>
+              <span class="accent-swatch" style="--c: oklch(60% 0.20 75);"></span>
+              <span class="accent-swatch" style="--c: oklch(55% 0.22 320);"></span>
+              <span class="accent-swatch" style="--c: oklch(25% 0.02 250);"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data & Privacy -->
+        <div class="section">
+          <h2>数据和隐私</h2>
+          <div class="desc">你的录音和转录文本怎么保存。</div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">历史保留时长</div>
+              <div class="l2">超过这个时间的记录会自动删除。</div>
+            </div>
+            <div class="select">
+              <span>永久保留</span>
+              <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></span>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">保留原始录音</div>
+              <div class="l2">关闭只存文本。原始音频更耗硬盘空间。</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="toggle"></div>
+              <span style="font-size:12.5px; color: var(--muted);">关闭（推荐）</span>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="lbl">
+              <div class="l1">匿名使用数据</div>
+              <div class="l2">帮助我们改进识别准确度。不会上传你的转录内容。</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="toggle on"></div>
+              <span style="font-size:12.5px;">开启</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danger zone -->
+        <div class="section">
+          <h2 style="color: var(--danger);">谨慎操作</h2>
+          <div class="desc">下面这些做完没法恢复，请确认后再点。</div>
+
+          <div class="danger-zone">
+            <div class="row">
+              <div class="info">
+                <div class="t1">导出全部历史</div>
+                <div class="t2">把 1,047 条转录打包成 JSON 或 Markdown。</div>
+              </div>
+              <button class="btn">导出</button>
+            </div>
+            <div class="row">
+              <div class="info">
+                <div class="t1">清空所有历史</div>
+                <div class="t2">删除全部 1,047 条转录和原始录音。无法恢复。</div>
+              </div>
+              <button class="btn btn-danger">清空</button>
+            </div>
+            <div class="row">
+              <div class="info">
+                <div class="t1">注销账号</div>
+                <div class="t2">删除你的 Whispr 账号、订阅和云端数据。</div>
+              </div>
+              <button class="btn btn-danger">注销</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- About -->
+        <div class="section">
+          <h2>关于</h2>
+          <div class="about">
+            <div class="logo">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </div>
+            <div class="info">
+              <div class="n">Whispr</div>
+              <div class="v">v2.4.1 · <span class="up">● 已是最新</span></div>
+            </div>
+            <div class="links">
+              <a href="#">更新日志</a>
+              <a href="#">帮助文档</a>
+              <a href="#">反馈</a>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
