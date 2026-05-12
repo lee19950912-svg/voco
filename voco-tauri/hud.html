@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>VoCo HUD</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; width: 100%;
+    background: transparent;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+  }
+  #hud {
+    width: 96px; height: 36px;
+    background: #0a0a0a;
+    border-radius: 18px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.35);
+    display: flex; align-items: center; justify-content: center;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 220ms ease, transform 300ms ease;
+    transform: translateY(8px);
+  }
+  #hud.show { opacity: 1; transform: translateY(0); }
+  .bar {
+    width: 3px; min-height: 4px; max-height: 20px;
+    background: #ffffff;
+    border-radius: 1.5px;
+  }
+</style>
+</head>
+<body>
+  <div id="hud"></div>
+  <script type="module" src="/src/hud.ts"></script>
+</body>
+</html>
