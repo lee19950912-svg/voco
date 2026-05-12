@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env (huge, regenerates from requirements)
+venv/
+.venv/
+
+# Secrets — never commit
+.env
+
+# Temp recordings produced at runtime
+*.wav
+
+# User-generated runtime data
+history.json
+stats.json
+
+# Build output
+build/
+dist/
+*.spec
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+
+# OS junk
+Thumbs.db
+.DS_Store

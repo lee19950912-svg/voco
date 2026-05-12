@@ -1,0 +1,12 @@
+recognize_engine: local
+recognize_language: auto
+polish_engine: relay
+polish_base_url: https://api.bltcy.ai/v1
+polish_model: claude-haiku-4-5-20251001
+translate_target: ko
+trigger_polish: alt_r
+trigger_translate_modifier: shift_r
+trigger_mode: toggle
+ui_language: zh
+input_device: 麦克风阵列 (适用于数字麦克风的英特尔® 智音技术)
+first_run_completed: true
