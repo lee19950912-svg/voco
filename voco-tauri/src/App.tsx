@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { check as checkForUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   Home,
   Clock,
@@ -26,6 +27,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SetupWizard } from "./SetupWizard";
+import type {
+  VoCoConfig,
+  VoCoResult,
+  VoCoStats,
+  Session,
+  DictEntry,
+} from "./types";
 import "./App.css";
 
 type Page = "home" | "history" | "dictionary" | "settings";
@@ -37,47 +45,15 @@ const NAV: { id: Page; label: string; Icon: LucideIcon }[] = [
   { id: "settings", label: "设置", Icon: SettingsIcon },
 ];
 
-interface VoCoResult {
-  raw: string;
-  text: string;
-  mode: string;
-}
-
-interface Session {
-  at: string;
-  mode: string;
-  raw: string;
-  text: string;
-  translate_target: string | null;
-  duration_ms: number;
-}
-
-interface VoCoStats {
-  total_sessions: number;
-  total_chars: number;
-  today_chars: number;
-  translate_count: number;
-}
-
-interface VoCoConfig {
-  recognize_engine: string;
-  recognize_language: string;
-  polish_model: string;
-  translate_model: string;
-  translate_target: string;
-  trigger_polish: string;
-  trigger_translate_modifier: string;
-  trigger_mode: string;
-  input_device: string;
-  first_run_completed: boolean;
-}
-
 function App() {
   const [page, setPage] = useState<Page>("home");
-  const [version] = useState("0.1.0");
+  const [version, setVersion] = useState("");
   const [engineStatus, setEngineStatus] = useState("加载中…");
   const [cfg, setCfg] = useState<VoCoConfig | null>(null);
   const [sessionHistory, setSessionHistory] = useState<VoCoResult[]>([]);
+  // Tracks total recognitions THIS session, independent of the 20-item
+  // display buffer above. Without this, "本次次数" freezes at 20.
+  const [sessionCount, setSessionCount] = useState(0);
   const [stats, setStats] = useState<VoCoStats>({
     total_sessions: 0,
     total_chars: 0,
@@ -113,10 +89,12 @@ function App() {
       .catch(() => setEngineStatus("后端未连接"));
 
     refreshStats();
+    getVersion().then(setVersion).catch(() => {});
 
     const unsubs: Array<() => void> = [];
     listen<VoCoResult>("voco:result", (e) => {
       setSessionHistory((h) => [e.payload, ...h].slice(0, 20));
+      setSessionCount((c) => c + 1);
       refreshStats();
     }).then((u) => unsubs.push(u));
     listen<{ message: string }>("voco:error", (e) => {
@@ -136,7 +114,7 @@ function App() {
   if (cfg && !wizardDone) {
     return (
       <SetupWizard
-        initialCfg={cfg as any}
+        initialCfg={cfg}
         onDone={() => {
           setWizardDone(true);
           setSessionHistory([]);
@@ -174,7 +152,7 @@ function App() {
                 key={n.id}
                 onClick={() => setPage(n.id)}
                 className={
-                  "w-full text-left px-3 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors text-[14px] " +
+                  "w-full text-left px-3 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors text-[14px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#4A90E2] " +
                   (active
                     ? "bg-[#EAF2FD] text-[#4A90E2] font-medium"
                     : "hover:bg-black/[0.04] text-black/70")
@@ -197,6 +175,7 @@ function App() {
           <HomePage
             cfg={cfg}
             sessionHistory={sessionHistory}
+            sessionCount={sessionCount}
             stats={stats}
             lastError={lastError}
             onDismissError={() => setLastError("")}
@@ -207,7 +186,9 @@ function App() {
           <HistoryPage onClearStats={refreshStats} />
         )}
         {page === "dictionary" && <DictionaryPage />}
-        {page === "settings" && <SettingsPage cfg={cfg} setCfg={setCfg} />}
+        {page === "settings" && (
+          <SettingsPage cfg={cfg} setCfg={setCfg} version={version} />
+        )}
       </main>
     </div>
   );
@@ -223,6 +204,7 @@ const TARGET_LANG_LABEL: Record<string, string> = {
 function HomePage({
   cfg,
   sessionHistory,
+  sessionCount,
   stats,
   lastError,
   onDismissError,
@@ -230,6 +212,7 @@ function HomePage({
 }: {
   cfg: VoCoConfig | null;
   sessionHistory: VoCoResult[];
+  sessionCount: number;
   stats: VoCoStats;
   lastError: string;
   onDismissError: () => void;
@@ -268,7 +251,7 @@ function HomePage({
       )}
 
       <div className="mt-6 grid grid-cols-4 gap-4">
-        <StatCard Icon={FileText} value={sessionHistory.length} label="本次次数" />
+        <StatCard Icon={FileText} value={sessionCount} label="本次次数" />
         <StatCard Icon={PenLine} value={stats.today_chars} label="今日字数" />
         <StatCard Icon={BarChart3} value={stats.total_chars} label="累计字数" />
         <StatCard Icon={Languages} value={stats.translate_count} label="翻译次数" />
@@ -294,7 +277,9 @@ function HomePage({
         ) : (
           <div className="mt-5 space-y-3">
             {sessionHistory.slice(0, 5).map((r, i) => (
-              <ResultRow key={i} r={r} />
+              // Prepend-only list — index is stable for any given (length, item) pair.
+              // Combine with raw prefix to disambiguate identical re-recognitions.
+              <ResultRow key={`${sessionHistory.length - i}-${r.raw.slice(0, 16)}`} r={r} />
             ))}
           </div>
         )}
@@ -318,7 +303,7 @@ function StatCard({
         <Icon size={18} strokeWidth={1.8} />
       </div>
       <div className="mt-4 text-[28px] font-semibold leading-none voco-mono">
-        {value.toLocaleString("en-US")}
+        {value.toLocaleString("zh-CN")}
       </div>
       <div className="mt-2 text-[12px] text-black/45">{label}</div>
     </div>
@@ -483,17 +468,12 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
         {!loading && sessions.length > 0 && filtered.length === 0 && (
           <div className="text-black/55 text-sm">没找到匹配的记录。</div>
         )}
-        {filtered.map((s, i) => (
-          <SessionRow key={i} s={s} />
+        {filtered.map((s) => (
+          <SessionRow key={`${s.at}-${s.raw.slice(0, 16)}`} s={s} />
         ))}
       </div>
     </div>
   );
-}
-
-interface DictEntry {
-  term: string;
-  note: string;
 }
 
 function DictionaryPage() {
@@ -610,9 +590,11 @@ function DictionaryPage() {
 function SettingsPage({
   cfg,
   setCfg,
+  version,
 }: {
   cfg: VoCoConfig | null;
   setCfg: (c: VoCoConfig) => void;
+  version: string;
 }) {
   const [mics, setMics] = useState<string[]>([]);
   const [autostart, setAutostart] = useState<boolean | null>(null);
@@ -693,7 +675,7 @@ function SettingsPage({
 
       <Card title="关于" icon={<Info size={16} strokeWidth={1.8} />}>
         <Row label="版本">
-          <span className="text-sm text-black/55">v0.1.0</span>
+          <span className="text-sm text-black/55 voco-mono">v{version || "—"}</span>
         </Row>
         <Row label="检查更新">
           <UpdateChecker />
@@ -713,11 +695,9 @@ function SettingsPage({
             onChange={(v) => update("trigger_translate_modifier", v)}
           />
         </Row>
-        <Row label="">
-          <span className="text-[11px] text-black/45">
-            改完快捷键后重启 VoCo 才会生效。
-          </span>
-        </Row>
+        <p className="text-[11px] text-black/45 pt-3">
+          改完快捷键后重启 VoCo 才会生效。
+        </p>
         <Row label="翻译目标语言">
           <select
             value={cfg.translate_target}

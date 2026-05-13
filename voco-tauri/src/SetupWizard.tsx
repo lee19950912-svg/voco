@@ -2,27 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openPath } from "@tauri-apps/plugin-opener";
-
-interface VoCoConfig {
-  recognize_engine: string;
-  recognize_language: string;
-  polish_model: string;
-  translate_model: string;
-  translate_target: string;
-  trigger_polish: string;
-  trigger_translate_modifier: string;
-  trigger_mode: string;
-  input_device: string;
-  first_run_completed: boolean;
-  [k: string]: any;
-}
-
-interface ApiKeyStatus {
-  volc: boolean;
-  deepseek: boolean;
-  relay: boolean;
-  openai: boolean;
-}
+import type { VoCoConfig, ApiKeyStatus } from "./types";
 
 const TOTAL_STEPS = 5;
 

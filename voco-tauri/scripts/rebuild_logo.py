@@ -31,7 +31,15 @@ def main() -> None:
     if not SRC.exists():
         raise SystemExit(f"missing: {SRC}")
 
-    orig = Image.open(SRC).convert("RGBA")
+    # Always operate on the original — re-running the script otherwise reads
+    # the previous composite (a rounded black square that fills the canvas)
+    # and produces garbage. Stash the original on the first run.
+    if not BACKUP.exists():
+        import shutil
+        shutil.copy(SRC, BACKUP)
+        print(f"backup -> {BACKUP}")
+
+    orig = Image.open(BACKUP).convert("RGBA")
     w, h = orig.size
 
     # Step 1: find the actual visible circle's bounding box by scanning the
@@ -66,10 +74,6 @@ def main() -> None:
     # mask. Everything outside the circle is dropped — including the white
     # corners we want to get rid of.
     out.paste(orig, (0, 0), circle_mask)
-
-    if not BACKUP.exists():
-        Image.open(SRC).save(BACKUP)
-        print(f"backup -> {BACKUP}")
 
     out.save(SRC)
     print(f"wrote   -> {SRC}  ({w}×{h}, rounded radius={radius}px)")
