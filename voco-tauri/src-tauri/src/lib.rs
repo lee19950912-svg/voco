@@ -13,6 +13,8 @@
 
 mod ai;
 mod audio;
+#[cfg(windows)]
+mod audio_ducker;
 mod config;
 mod dictionary;
 mod paste;

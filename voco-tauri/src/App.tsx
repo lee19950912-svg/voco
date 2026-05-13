@@ -661,6 +661,15 @@ function SettingsPage({
             <option value="ko">韩语</option>
           </select>
         </Row>
+        <Row label="录音时自动静音其他声音">
+          <Toggle
+            checked={cfg.mute_others_while_recording}
+            onChange={(v) => update("mute_others_while_recording", v)}
+          />
+        </Row>
+        <p className="text-[11px] text-black/45 pt-1 pb-1">
+          按住快捷键说话时暂时关闭电脑外放，松开后恢复。本来就静音 / 没声音时不动。
+        </p>
       </Card>
 
       <Card title="启动" icon={<Power size={16} strokeWidth={1.8} />}>

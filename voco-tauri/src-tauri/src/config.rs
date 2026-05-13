@@ -31,6 +31,10 @@ pub struct AppConfig {
     pub ui_language: String,
     pub input_device: String,
     pub first_run_completed: bool,
+
+    /// Mute the default speakers while a recording is in progress, restore on
+    /// release. Mirrors Wispr Flow's Windows default. On by default.
+    pub mute_others_while_recording: bool,
 }
 
 impl Default for AppConfig {
@@ -51,6 +55,7 @@ impl Default for AppConfig {
             ui_language: "zh".into(),
             input_device: String::new(),
             first_run_completed: false,
+            mute_others_while_recording: true,
         }
     }
 }

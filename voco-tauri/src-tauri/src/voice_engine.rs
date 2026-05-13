@@ -54,6 +54,11 @@ pub struct VoiceEngine {
     recorder: Arc<Mutex<Option<RecordingSession>>>,
     level_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     processing_lock: Arc<Mutex<()>>,
+    /// Mute-state snapshot taken when recording starts. Held until
+    /// stop_and_process restores it. None when no recording is active or
+    /// the ducker was disabled / failed.
+    #[cfg(windows)]
+    duck_guard: Arc<Mutex<Option<crate::audio_ducker::DuckGuard>>>,
 }
 
 impl VoiceEngine {
@@ -62,6 +67,8 @@ impl VoiceEngine {
             recorder: Arc::new(Mutex::new(None)),
             level_task: Arc::new(Mutex::new(None)),
             processing_lock: Arc::new(Mutex::new(())),
+            #[cfg(windows)]
+            duck_guard: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -127,6 +134,23 @@ impl VoiceEngine {
             }
         });
         *self.level_task.lock().await = Some(handle);
+
+        // Audio ducking: mute speakers while recording (Wispr Flow style).
+        // Failures are non-fatal — we'd rather record with audio still playing
+        // than abort the whole flow.
+        #[cfg(windows)]
+        if cfg.mute_others_while_recording {
+            let guard = tokio::task::spawn_blocking(crate::audio_ducker::duck)
+                .await
+                .ok()
+                .and_then(|r| {
+                    r.map_err(|e| tracing::warn!("audio duck failed: {e}"))
+                        .ok()
+                })
+                .unwrap_or_else(crate::audio_ducker::DuckGuard::noop);
+            *self.duck_guard.lock().await = Some(guard);
+        }
+
         Ok(())
     }
 
@@ -146,6 +170,18 @@ impl VoiceEngine {
         // Stop the level pump.
         if let Some(task) = self.level_task.lock().await.take() {
             task.abort();
+        }
+
+        // Restore speakers ASAP on hotkey release — before WAV drain, ASR,
+        // and paste. The user wants their music back the instant they let go.
+        #[cfg(windows)]
+        if let Some(guard) = self.duck_guard.lock().await.take() {
+            let _ = tokio::task::spawn_blocking(move || {
+                if let Err(e) = crate::audio_ducker::restore(guard) {
+                    tracing::warn!("audio duck restore failed: {e}");
+                }
+            })
+            .await;
         }
 
         // Take the recorder out and drain to WAV.

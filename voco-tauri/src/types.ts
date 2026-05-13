@@ -17,6 +17,7 @@ export interface VoCoConfig {
   ui_language: string;
   input_device: string;
   first_run_completed: boolean;
+  mute_others_while_recording: boolean;
 }
 
 export interface VoCoResult {
