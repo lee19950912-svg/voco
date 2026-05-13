@@ -692,7 +692,17 @@ function SettingsPage({
       </Card>
 
       <Card title="快捷键与触发" icon={<Keyboard size={16} strokeWidth={1.8} />}>
-        <Row label="录音键（按住=润色）">
+        <Row label="触发方式">
+          <select
+            value={cfg.trigger_mode}
+            onChange={(e) => update("trigger_mode", e.target.value)}
+            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[260px]"
+          >
+            <option value="hold">按住说话（松开就出字）</option>
+            <option value="toggle">按一下开始 / 再按一下结束</option>
+          </select>
+        </Row>
+        <Row label="录音键">
           <KeyCapture
             value={cfg.trigger_polish}
             onChange={(v) => update("trigger_polish", v)}
@@ -705,7 +715,7 @@ function SettingsPage({
           />
         </Row>
         <p className="text-[11px] text-black/45 pt-3">
-          改完快捷键后重启 VoCo 才会生效。
+          改完快捷键或触发方式后，需要重启 VoCo 才会生效。
         </p>
         <Row label="翻译目标语言">
           <select

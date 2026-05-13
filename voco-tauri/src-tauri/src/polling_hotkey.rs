@@ -10,6 +10,11 @@
 //! We poll the asynchronous key state every 20 ms (~50 Hz). Light CPU load
 //! (<1%), and we get press/release events for any virtual key we want.
 //!
+//! Two trigger modes (`cfg.trigger_mode`):
+//!   * **hold** — press to start, release to stop. Default.
+//!   * **toggle** — press once to start; the key can be released, the
+//!     recording continues; press a second time to stop.
+//!
 //! IMPORTANT: this loop must stay non-blocking. We dispatch the actual record
 //! / process work onto Tauri's main async runtime via `async_runtime::spawn`
 //! so that the polling itself never stalls — earlier code created a private
@@ -78,75 +83,104 @@ fn vk_from_code(code: &str) -> Option<u16> {
     Some(vk)
 }
 
+fn spawn_start(app: &AppHandle, engine: &Arc<VoiceEngine>) {
+    let app_c = app.clone();
+    let eng_c = engine.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = eng_c.start_recording(&app_c).await {
+            tracing::warn!("start_recording: {e}");
+            let _ = app_c.emit(
+                "voco:error",
+                ErrorPayload { message: e.to_string() },
+            );
+        }
+    });
+}
+
+fn spawn_stop(app: &AppHandle, engine: &Arc<VoiceEngine>, mode: &str) {
+    let app_c = app.clone();
+    let eng_c = engine.clone();
+    let mode_owned = mode.to_string();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = eng_c.stop_and_process(&app_c, &mode_owned).await {
+            tracing::warn!("stop_and_process: {e}");
+            let _ = app_c.emit(
+                "voco:error",
+                ErrorPayload { message: e.to_string() },
+            );
+        }
+    });
+}
+
 fn run(app: AppHandle, engine: Arc<VoiceEngine>, stop: Arc<AtomicBool>) {
-    // Resolve hotkey codes from config — fall back to alt_r / shift_r if the
-    // config strings are unrecognized. Changes require an app restart.
+    // Resolve hotkey codes + mode from config. Changes require an app restart.
     let cfg = AppConfig::load().unwrap_or_default();
     let trigger_vk = vk_from_code(&cfg.trigger_polish).unwrap_or(VK_RMENU.0);
     let translate_vk = vk_from_code(&cfg.trigger_translate_modifier).unwrap_or(VK_RSHIFT.0);
+    let is_toggle = cfg.trigger_mode.eq_ignore_ascii_case("toggle");
     tracing::info!(
-        "hotkey: trigger={} (vk=0x{:X}), translate_modifier={} (vk=0x{:X})",
+        "hotkey: trigger={} (vk=0x{:X}), translate_modifier={} (vk=0x{:X}), mode={}",
         cfg.trigger_polish,
         trigger_vk,
         cfg.trigger_translate_modifier,
         translate_vk,
+        if is_toggle { "toggle" } else { "hold" },
     );
 
-    let mut alt_was_down = false;
+    let mut trigger_was_down = false;
     // Whether the translate modifier was observed as held down at ANY point
-    // during the current trigger press. We must sample continuously because
-    // users commonly release the modifier before the trigger — checking only
-    // at release-time misses the modifier in the typical case.
+    // during the current recording session. We sample continuously because
+    // users commonly release the modifier before the trigger (hold mode) or
+    // tap it briefly during a long toggle session.
     let mut translate_seen = false;
+    // Toggle-mode logical state: are we currently recording?
+    let mut toggle_recording = false;
+
     loop {
         if stop.load(Ordering::Relaxed) {
             tracing::info!("polling_hotkey: stop signal received, exiting");
             return;
         }
-        let alt_is_down = key_is_down(trigger_vk);
+        let trigger_is_down = key_is_down(trigger_vk);
+        let press_edge = trigger_is_down && !trigger_was_down;
 
-        if alt_is_down && !alt_was_down {
-            // Press transition — kick off recording, reset modifier tracking.
-            translate_seen = key_is_down(translate_vk);
-            let app_clone = app.clone();
-            let engine_clone = engine.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = engine_clone.start_recording(&app_clone).await {
-                    tracing::warn!("start_recording: {e}");
-                    let _ = app_clone.emit(
-                        "voco:error",
-                        ErrorPayload { message: e.to_string() },
-                    );
-                }
-            });
-        } else if alt_is_down {
-            // While the trigger is held, latch the modifier as "seen" if it
-            // goes down at any point — even briefly.
-            if !translate_seen && key_is_down(translate_vk) {
+        if is_toggle {
+            // While recording in toggle mode, latch modifier presses any time
+            // — user might tap shift_r mid-recording to switch to translate.
+            if toggle_recording && !translate_seen && key_is_down(translate_vk) {
                 translate_seen = true;
             }
-        } else if !alt_is_down && alt_was_down {
-            // Release transition — pick mode using the latched flag.
-            let mode = if translate_seen { "translate" } else { "polish" };
-            let app_clone = app.clone();
-            let engine_clone = engine.clone();
-            let mode_owned = mode.to_string();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = engine_clone
-                    .stop_and_process(&app_clone, &mode_owned)
-                    .await
-                {
-                    tracing::warn!("stop_and_process: {e}");
-                    let _ = app_clone.emit(
-                        "voco:error",
-                        ErrorPayload { message: e.to_string() },
-                    );
+            if press_edge {
+                if !toggle_recording {
+                    // First press of a cycle — start a fresh session.
+                    toggle_recording = true;
+                    translate_seen = key_is_down(translate_vk);
+                    spawn_start(&app, &engine);
+                } else {
+                    // Second press — close out the session.
+                    toggle_recording = false;
+                    let mode = if translate_seen { "translate" } else { "polish" };
+                    spawn_stop(&app, &engine, mode);
+                    translate_seen = false;
                 }
-            });
-            translate_seen = false;
+            }
+        } else {
+            // Hold mode (default, original behavior).
+            if press_edge {
+                translate_seen = key_is_down(translate_vk);
+                spawn_start(&app, &engine);
+            } else if trigger_is_down {
+                if !translate_seen && key_is_down(translate_vk) {
+                    translate_seen = true;
+                }
+            } else if !trigger_is_down && trigger_was_down {
+                let mode = if translate_seen { "translate" } else { "polish" };
+                spawn_stop(&app, &engine, mode);
+                translate_seen = false;
+            }
         }
 
-        alt_was_down = alt_is_down;
+        trigger_was_down = trigger_is_down;
         std::thread::sleep(Duration::from_millis(20));
     }
 }

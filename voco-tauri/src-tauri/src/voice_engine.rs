@@ -54,6 +54,13 @@ pub struct VoiceEngine {
     recorder: Arc<Mutex<Option<RecordingSession>>>,
     level_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     processing_lock: Arc<Mutex<()>>,
+    /// Serializes the start/stop lifecycle. start_recording holds this for
+    /// the duration of mic open + slot install; stop_and_process holds it
+    /// for the duration of slot drain. Prevents the "orphan session" race
+    /// where a release fires before mic-open completes — without this lock,
+    /// stop_and_process would see an empty slot, return early, and the mic
+    /// would finish opening *after* and install an unreleasable session.
+    lifecycle_lock: Arc<Mutex<()>>,
     /// Mute-state snapshot taken when recording starts. Held until
     /// stop_and_process restores it. None when no recording is active or
     /// the ducker was disabled / failed.
@@ -67,12 +74,17 @@ impl VoiceEngine {
             recorder: Arc::new(Mutex::new(None)),
             level_task: Arc::new(Mutex::new(None)),
             processing_lock: Arc::new(Mutex::new(())),
+            lifecycle_lock: Arc::new(Mutex::new(())),
             #[cfg(windows)]
             duck_guard: Arc::new(Mutex::new(None)),
         }
     }
 
     pub async fn start_recording(&self, app: &AppHandle) -> Result<()> {
+        // Held for the entire function so stop_and_process can't race us
+        // and observe an empty slot mid-open. See struct doc on lifecycle_lock.
+        let _lifecycle = self.lifecycle_lock.lock().await;
+
         // Race guard: if a session is already in progress (e.g., the user
         // hammered the hotkey, or a UI button + hotkey both fired), just
         // return. The existing session keeps running. Without this, two
@@ -167,6 +179,12 @@ impl VoiceEngine {
         mode: &str,
         dry_run: bool,
     ) -> Result<()> {
+        // Wait for any in-flight start_recording to finish before we look at
+        // the slot. Without this, a fast-tap (release before mic finishes
+        // opening) leaves an orphan session that gets drained on the *next*
+        // press, surfacing as code 1013 "no speech".
+        let _lifecycle = self.lifecycle_lock.lock().await;
+
         // Stop the level pump.
         if let Some(task) = self.level_task.lock().await.take() {
             task.abort();
