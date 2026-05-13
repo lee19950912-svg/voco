@@ -13,6 +13,7 @@
 use crate::ai::AiClient;
 use crate::audio::RecordingSession;
 use crate::config::{ApiKeys, AppConfig};
+use crate::dictionary::Dictionary;
 use crate::paste::paste_text;
 use crate::stats::{History, Session};
 use crate::volc_asr::{recognize as volc_recognize, VolcConfig};
@@ -271,13 +272,17 @@ async fn process_pipeline(
     let final_text = match mode {
         "raw" => raw_text.clone(),
         "polish" => {
+            let hint = Dictionary::load().polish_hint();
             match AiClient::new(
                 &cfg.polish_base_url,
                 &keys.deepseek,
                 &cfg.polish_model,
                 "DeepSeek 润色",
             ) {
-                Ok(client) => match client.polish(&raw_text).await {
+                Ok(client) => match client
+                    .polish_with_hint(&raw_text, hint.as_deref())
+                    .await
+                {
                     Ok(t) if !t.trim().is_empty() => t,
                     Ok(_) => {
                         warning = Some("润色返回为空，已使用原文。".to_string());

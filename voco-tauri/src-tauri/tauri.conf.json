@@ -64,6 +64,16 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
+    },
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://updates.voco.app/latest.json"
+      ],
+      "pubkey": "",
+      "windows": { "installMode": "passive" }
     }
   }
 }

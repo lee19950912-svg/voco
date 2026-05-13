@@ -21,6 +21,13 @@
     "store:default",
     "fs:default",
     "shell:default",
-    "dialog:default"
+    "dialog:default",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

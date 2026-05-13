@@ -14,6 +14,7 @@
 mod ai;
 mod audio;
 mod config;
+mod dictionary;
 mod paste;
 #[cfg(windows)]
 mod polling_hotkey;
@@ -22,6 +23,7 @@ mod voice_engine;
 mod volc_asr;
 
 use config::AppConfig;
+use dictionary::Dictionary;
 use stats::{History, Stats};
 use voice_engine::VoiceEngine;
 
@@ -30,7 +32,7 @@ use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent,
+    AppHandle, Emitter, Manager, RunEvent,
 };
 
 // ----------------- Tauri commands -----------------
@@ -84,6 +86,16 @@ struct ApiKeyStatus {
     deepseek: bool,
     relay: bool,
     openai: bool,
+}
+
+#[tauri::command]
+fn get_dictionary() -> Dictionary {
+    Dictionary::load()
+}
+
+#[tauri::command]
+fn save_dictionary(dict: Dictionary) -> Result<(), String> {
+    dict.save().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -208,12 +220,42 @@ pub fn run() {
         !std::env::var("VOLC_APP_ID").unwrap_or_default().is_empty(),
     );
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,voco=debug")),
-        )
-        .init();
+    // Logging: stdout (visible during `pnpm tauri dev`) PLUS a daily-rolling
+    // file at %APPDATA%\VoCo\logs\voco.log.YYYY-MM-DD. The file lets us
+    // diagnose problems on user machines without a console.
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,voco=debug"));
+
+    // Keep the WorkerGuard alive for the lifetime of the process — dropping
+    // it flushes pending writes and closes the file.
+    let file_guard = match config::config_dir() {
+        Ok(dir) => {
+            let log_dir = dir.join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            let appender = tracing_appender::rolling::daily(&log_dir, "voco.log");
+            let (writer, guard) = tracing_appender::non_blocking(appender);
+            use tracing_subscriber::layer::SubscriberExt;
+            let subscriber = tracing_subscriber::registry()
+                .with(env_filter)
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_ansi(false)
+                        .with_writer(writer),
+                );
+            let _ = tracing::subscriber::set_global_default(subscriber);
+            Some(guard)
+        }
+        Err(_) => {
+            tracing_subscriber::fmt().with_env_filter(env_filter).init();
+            None
+        }
+    };
+    // Leak the guard so it stays alive for the process. Cleaner than threading
+    // it through the AppHandle for a daemon-style app that runs until killed.
+    if let Some(g) = file_guard {
+        Box::leak(Box::new(g));
+    }
 
     let engine = Arc::new(VoiceEngine::new());
 
@@ -224,6 +266,19 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        // Optional: open at login. The plugin exposes JS APIs (enable /
+        // disable / isEnabled) that the settings page calls. We do NOT enable
+        // it by default — only when the user toggles the option on.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
+        // Update + process plugins. The updater plugin is wired up here so the
+        // settings page can offer a "Check for updates" button as soon as we
+        // have a real release endpoint. Without a configured endpoint the
+        // plugin simply reports "no updates available", which is fine.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // Note: tauri_plugin_updater is installed (Cargo.toml) but not loaded
         // here yet — it requires an [updater] config block + signing keys.
         // We'll wire it up when we have a release server to publish updates from.
@@ -237,12 +292,22 @@ pub fn run() {
             get_stats,
             clear_history,
             get_config_dir,
-            check_api_keys
+            check_api_keys,
+            get_dictionary,
+            save_dictionary
         ])
         .setup(move |app| {
-            // System tray.
+            // System tray. If this fails the user has no menu to quit from,
+            // so emit a warning event the frontend can show.
             if let Err(e) = build_tray(app.handle()) {
-                tracing::warn!("tray icon 创建失败: {e}");
+                tracing::error!("tray icon 创建失败: {e}");
+                let _ = app
+                    .handle()
+                    .emit("voco:error", voice_engine::ErrorPayload {
+                        message: format!(
+                            "无法创建系统托盘图标：{e}。仍可使用，但关掉窗口后不易找回。"
+                        ),
+                    });
             }
 
             // Bare-Alt hotkey via Windows polling (bypasses hook blockers).
@@ -275,7 +340,19 @@ pub fn run() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("error while building tauri application")
+        .unwrap_or_else(|e| {
+            // Catastrophic failure during startup. In release builds there's
+            // no stdout console, so write a crash file the user (or we) can
+            // pick up from %APPDATA%\VoCo.
+            tracing::error!("Tauri build 失败: {e}");
+            if let Ok(dir) = config::config_dir() {
+                let _ = std::fs::write(
+                    dir.join("startup_error.txt"),
+                    format!("VoCo 启动失败：\n{e}\n"),
+                );
+            }
+            std::process::exit(1);
+        })
         .run(|app_handle, event| {
             // On exit, ask the polling hotkey thread to stop. Without this it
             // keeps running for up to 20ms after the app dies and may emit

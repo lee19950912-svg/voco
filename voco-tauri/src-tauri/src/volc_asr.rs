@@ -263,12 +263,21 @@ pub async fn recognize(cfg: &VolcConfig, wav_bytes: &[u8]) -> Result<String> {
     audio_frame.extend_from_slice(&audio_compressed);
     sink.send(Message::Binary(audio_frame.into())).await?;
 
-    // 4) Read frames until we see one with text (or a negative sequence = stream end)
+    // 4) Read frames until we see one with text (or a negative sequence = stream end).
+    // Bound the total time we spend reading frames so a misbehaving server can't
+    // keep us hanging for 15 minutes (30 frames × 30s).
+    let overall_start = std::time::Instant::now();
+    const OVERALL_TIMEOUT: Duration = Duration::from_secs(20);
     let mut final_text = String::new();
     for _ in 0..30 {
-        let msg = timeout(Duration::from_secs(30), stream.next())
+        let elapsed = overall_start.elapsed();
+        if elapsed >= OVERALL_TIMEOUT {
+            bail!("火山识别整体超时（{} 秒）", OVERALL_TIMEOUT.as_secs());
+        }
+        let remaining = OVERALL_TIMEOUT - elapsed;
+        let msg = timeout(remaining, stream.next())
             .await
-            .map_err(|_| anyhow!("火山响应超时（30 秒）"))?
+            .map_err(|_| anyhow!("火山响应超时"))?
             .ok_or_else(|| anyhow!("火山过早关闭连接"))??;
         let bytes = match msg {
             Message::Binary(b) => b,

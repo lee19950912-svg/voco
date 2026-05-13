@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+import { check as checkForUpdate } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { SetupWizard } from "./SetupWizard";
 import "./App.css";
 
@@ -62,6 +65,14 @@ function App() {
   });
   const [lastError, setLastError] = useState<string>("");
   const [wizardDone, setWizardDone] = useState(false);
+
+  // Auto-dismiss errors after 8 seconds — they're transient by nature and
+  // a stuck red banner makes the app feel broken.
+  useEffect(() => {
+    if (!lastError) return;
+    const t = setTimeout(() => setLastError(""), 8000);
+    return () => clearTimeout(t);
+  }, [lastError]);
 
   function refreshStats() {
     invoke<VoCoStats>("get_stats").then(setStats).catch(() => {});
@@ -251,6 +262,7 @@ function HomePage({
 function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
   function reload() {
     setLoading(true);
@@ -279,6 +291,14 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
       .catch(() => {});
   }
 
+  const filtered = query.trim()
+    ? sessions.filter(
+        (s) =>
+          s.text.toLowerCase().includes(query.toLowerCase()) ||
+          s.raw.toLowerCase().includes(query.toLowerCase()),
+      )
+    : sessions;
+
   return (
     <div className="p-10">
       <div className="flex items-center justify-between">
@@ -292,12 +312,26 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
           </button>
         )}
       </div>
+
+      {sessions.length > 0 && (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索历史…"
+          className="mt-5 w-full border border-black/15 rounded-lg px-3 py-2 text-sm"
+        />
+      )}
+
       <div className="mt-6 space-y-3">
         {loading && <div className="text-black/45 text-sm">加载中…</div>}
         {!loading && sessions.length === 0 && (
           <div className="text-black/55 text-sm">还没有记录。</div>
         )}
-        {sessions.map((s, i) => (
+        {!loading && sessions.length > 0 && filtered.length === 0 && (
+          <div className="text-black/55 text-sm">没找到匹配的记录。</div>
+        )}
+        {filtered.map((s, i) => (
           <SessionRow key={i} s={s} />
         ))}
       </div>
@@ -305,15 +339,107 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
   );
 }
 
+interface DictEntry {
+  term: string;
+  note: string;
+}
+
 function DictionaryPage() {
+  const [entries, setEntries] = useState<DictEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [newTerm, setNewTerm] = useState("");
+  const [newNote, setNewNote] = useState("");
+
+  useEffect(() => {
+    invoke<{ entries: DictEntry[] }>("get_dictionary")
+      .then((d) => setEntries(d.entries ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  function persist(next: DictEntry[]) {
+    setEntries(next);
+    invoke("save_dictionary", { dict: { entries: next } }).catch(console.error);
+  }
+
+  function addEntry() {
+    const term = newTerm.trim();
+    if (!term) return;
+    if (entries.some((e) => e.term === term)) {
+      setNewTerm("");
+      setNewNote("");
+      return;
+    }
+    persist([{ term, note: newNote.trim() }, ...entries]);
+    setNewTerm("");
+    setNewNote("");
+  }
+
+  function removeEntry(idx: number) {
+    persist(entries.filter((_, i) => i !== idx));
+  }
+
   return (
-    <div className="p-10">
+    <div className="p-10 max-w-3xl">
       <h1 className="text-[28px] font-semibold tracking-tight">词典</h1>
       <p className="mt-3 text-black/55">
-        添加专有名词，VoCo 会用它们提高识别准确度。
+        把你常说的专有名词、人名、公司名加进来。VoCo 会在润色时优先用这里的写法，避免被识别错。
       </p>
-      <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-6 text-black/45 text-sm">
-        这个功能下个版本上线。
+
+      <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-6">
+        <div className="flex gap-3">
+          <input
+            value={newTerm}
+            onChange={(e) => setNewTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addEntry();
+            }}
+            placeholder="词条，例如：李在镕"
+            className="flex-1 border border-black/15 rounded-lg px-3 py-2 text-sm"
+          />
+          <input
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addEntry();
+            }}
+            placeholder="说明（可空）"
+            className="flex-1 border border-black/15 rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            onClick={addEntry}
+            disabled={!newTerm.trim()}
+            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+          >
+            添加
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          {!loaded && <div className="text-black/45 text-sm">加载中…</div>}
+          {loaded && entries.length === 0 && (
+            <div className="text-black/45 text-sm">还没有词条。</div>
+          )}
+          {entries.map((e, i) => (
+            <div
+              key={`${e.term}-${i}`}
+              className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-black/[0.02] group"
+            >
+              <div className="flex-1">
+                <div className="text-sm font-medium text-black/85">{e.term}</div>
+                {e.note && (
+                  <div className="text-xs text-black/45 mt-0.5">{e.note}</div>
+                )}
+              </div>
+              <button
+                onClick={() => removeEntry(i)}
+                className="text-xs text-black/40 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-50"
+              >
+                删除
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -327,9 +453,24 @@ function SettingsPage({
   setCfg: (c: VoCoConfig) => void;
 }) {
   const [mics, setMics] = useState<string[]>([]);
+  const [autostart, setAutostart] = useState<boolean | null>(null);
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
+    isAutostartEnabled()
+      .then((v) => setAutostart(v))
+      .catch(() => setAutostart(false));
   }, []);
+
+  async function toggleAutostart(next: boolean) {
+    setAutostart(next);
+    try {
+      if (next) await enableAutostart();
+      else await disableAutostart();
+    } catch {
+      // Revert on failure (e.g., Windows policy blocks the registry write).
+      setAutostart(!next);
+    }
+  }
 
   if (!cfg) return <div className="p-10">加载中…</div>;
 
@@ -358,6 +499,25 @@ function SettingsPage({
               </option>
             ))}
           </select>
+        </Row>
+      </Card>
+
+      <Card title="启动">
+        <Row label="开机自动启动 VoCo">
+          <Toggle
+            checked={!!autostart}
+            disabled={autostart === null}
+            onChange={toggleAutostart}
+          />
+        </Row>
+      </Card>
+
+      <Card title="关于">
+        <Row label="版本">
+          <span className="text-sm text-black/55">v0.1.0</span>
+        </Row>
+        <Row label="检查更新">
+          <UpdateChecker />
         </Row>
       </Card>
 
@@ -476,7 +636,7 @@ function Row({
 
 function ResultRow({ r }: { r: VoCoResult }) {
   return (
-    <div className="rounded-xl border border-black/[0.06] p-3">
+    <div className="rounded-xl border border-black/[0.06] p-3 group">
       <div className="text-xs text-black/45 flex items-center gap-2 mb-1">
         <span
           className={
@@ -489,6 +649,7 @@ function ResultRow({ r }: { r: VoCoResult }) {
           }
         />
         {r.mode === "translate" ? "翻译" : r.mode === "polish" ? "润色" : "原文"}
+        <CopyButton text={r.text} />
       </div>
       <div className="text-sm text-black/85">{r.text}</div>
       {r.raw !== r.text && (
@@ -515,6 +676,7 @@ function SessionRow({ s }: { s: Session }) {
           }
         />
         {s.mode === "translate" ? "翻译" : s.mode === "polish" ? "润色" : "原文"}
+        <CopyButton text={s.text} />
         <span className="ml-auto">{ago}</span>
       </div>
       <div className="text-sm text-black/85">{s.text}</div>
@@ -522,6 +684,120 @@ function SessionRow({ s }: { s: Session }) {
         <div className="text-xs text-black/35 mt-1">原文: {s.raw}</div>
       )}
     </div>
+  );
+}
+
+function UpdateChecker() {
+  const [state, setState] = useState<
+    "idle" | "checking" | "uptodate" | "downloading" | "ready" | "error"
+  >("idle");
+  const [message, setMessage] = useState<string>("");
+
+  async function check() {
+    setState("checking");
+    setMessage("");
+    try {
+      const update = await checkForUpdate();
+      if (!update) {
+        setState("uptodate");
+        return;
+      }
+      setState("downloading");
+      setMessage(`正在下载 v${update.version}…`);
+      await update.downloadAndInstall();
+      setState("ready");
+    } catch (e) {
+      setState("error");
+      setMessage(String(e));
+    }
+  }
+
+  if (state === "ready") {
+    return (
+      <button
+        onClick={() => relaunch().catch(() => {})}
+        className="text-sm bg-emerald-600 text-white px-4 py-1.5 rounded-lg hover:bg-emerald-700"
+      >
+        重启以应用更新
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={check}
+        disabled={state === "checking" || state === "downloading"}
+        className="text-sm border border-black/15 px-4 py-1.5 rounded-lg hover:bg-black/5 disabled:opacity-40"
+      >
+        {state === "checking"
+          ? "检查中…"
+          : state === "downloading"
+            ? "下载中…"
+            : "检查更新"}
+      </button>
+      {state === "uptodate" && (
+        <span className="text-xs text-black/55">已是最新版本</span>
+      )}
+      {state === "error" && (
+        <span className="text-xs text-red-600">{friendlyError(message)}</span>
+      )}
+      {state === "downloading" && message && (
+        <span className="text-xs text-black/55">{message}</span>
+      )}
+    </div>
+  );
+}
+
+function Toggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={
+        "relative inline-flex items-center w-11 h-6 rounded-full transition-colors " +
+        (checked ? "bg-blue-600" : "bg-black/15") +
+        (disabled ? " opacity-50 cursor-not-allowed" : " cursor-pointer")
+      }
+      role="switch"
+      aria-checked={checked}
+    >
+      <span
+        className={
+          "absolute h-5 w-5 bg-white rounded-full transition-transform shadow-sm " +
+          (checked ? "translate-x-[22px]" : "translate-x-[2px]")
+        }
+      />
+    </button>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // Clipboard may fail in odd contexts — fail quietly.
+        }
+      }}
+      className="text-[11px] text-black/45 hover:text-black/75 px-2 py-0.5 rounded hover:bg-black/5"
+    >
+      {copied ? "已复制" : "复制"}
+    </button>
   );
 }
 

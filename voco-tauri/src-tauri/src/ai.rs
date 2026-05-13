@@ -87,17 +87,30 @@ impl AiClient {
         if api_key.is_empty() {
             return Err(anyhow!("{label}: API Key 未设置"));
         }
+        // 45 s gives DeepSeek room during high-load periods, but still bounds
+        // the worst case so users don't sit watching a frozen HUD.
         let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(45))
+            .connect_timeout(Duration::from_secs(10))
             .build()?;
         Ok(Self { base_url, api_key, model, label, http })
     }
 
-    pub async fn polish(&self, text: &str) -> Result<String> {
+    /// Polish with an optional extra system-prompt hint (e.g., a user
+    /// dictionary of proper nouns). Pass `None` for plain polishing.
+    pub async fn polish_with_hint(
+        &self,
+        text: &str,
+        hint: Option<&str>,
+    ) -> Result<String> {
         if !has_real_content(text) {
             return Ok(text.to_string());
         }
-        self.chat(SYSTEM_POLISH, text).await
+        let sys = match hint {
+            Some(h) if !h.trim().is_empty() => format!("{SYSTEM_POLISH}\n\n{h}"),
+            _ => SYSTEM_POLISH.to_string(),
+        };
+        self.chat(&sys, text).await
     }
 
     pub async fn translate(&self, text: &str, target_lang: &str) -> Result<String> {
@@ -109,6 +122,34 @@ impl AiClient {
     }
 
     async fn chat(&self, system: &str, user: &str) -> Result<String> {
+        // Retry once on transient errors (network blip, 5xx, 429). Total
+        // wall-clock budget = up to 2 × (45 s timeout) but typically much
+        // less because real failures fail fast.
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 0..2 {
+            match self.chat_once(system, user).await {
+                Ok(out) => return Ok(out),
+                Err(e) => {
+                    let msg = e.to_string();
+                    let retryable = msg.contains("timeout")
+                        || msg.contains("timed out")
+                        || msg.contains("connect")
+                        || msg.contains("HTTP 5")
+                        || msg.contains("HTTP 429");
+                    if retryable && attempt == 0 {
+                        tracing::warn!("{}: 第 1 次失败，重试中：{}", self.label, msg);
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        last_err = Some(e);
+                        continue;
+                    }
+                    return Err(e);
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| anyhow!("{}: 未知错误", self.label)))
+    }
+
+    async fn chat_once(&self, system: &str, user: &str) -> Result<String> {
         let body = ChatRequest {
             model: &self.model,
             messages: vec![
