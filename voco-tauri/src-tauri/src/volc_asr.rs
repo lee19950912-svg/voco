@@ -130,6 +130,31 @@ fn gunzip(data: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Strip control bytes + truncate before surfacing into logs / UI. Volcengine
+/// has been observed echoing raw audio fragments back inside the `message`
+/// field of code=1012 responses; the bytes are valid UTF-8 (they were JSON-
+/// escaped) but contain backspace / form-feed / etc. that corrupt the log
+/// and could include user voice data. Limit blast radius to a short safe
+/// summary.
+fn sanitize_msg(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .take(200)
+        .map(|c| {
+            if c.is_control() && c != '\n' && c != '\t' {
+                '.'
+            } else {
+                c
+            }
+        })
+        .collect();
+    if s.chars().count() > 200 {
+        format!("{cleaned}…(已截断)")
+    } else {
+        cleaned
+    }
+}
+
 fn parse_frame(data: &[u8]) -> Result<VolcResponse> {
     if data.len() < 8 {
         bail!("响应数据过短: {} bytes", data.len());
@@ -146,7 +171,7 @@ fn parse_frame(data: &[u8]) -> Result<VolcResponse> {
             u32::from_be_bytes([data[8], data[9], data[10], data[11]]) as usize;
         let end = 12usize.checked_add(err_size).unwrap_or(usize::MAX).min(data.len());
         let err_msg = String::from_utf8_lossy(&data[12..end]).into_owned();
-        bail!("火山错误 code={}: {}", err_code, err_msg);
+        bail!("火山错误 code={}: {}", err_code, sanitize_msg(&err_msg));
     }
 
     if msg_type == MSG_FULL_RESPONSE {
@@ -286,7 +311,11 @@ pub async fn recognize(cfg: &VolcConfig, wav_bytes: &[u8]) -> Result<String> {
         };
         let frame = parse_frame(&bytes)?;
         if frame.code != 0 && frame.code != 1000 {
-            bail!("火山识别失败 code={}: {}", frame.code, frame.message);
+            bail!(
+                "火山识别失败 code={}: {}",
+                frame.code,
+                sanitize_msg(&frame.message)
+            );
         }
         if let Some(first) = frame.result.first() {
             let txt = first.text.trim();

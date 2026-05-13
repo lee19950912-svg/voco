@@ -17,6 +17,8 @@ mod audio;
 mod audio_ducker;
 mod config;
 mod dictionary;
+#[cfg(windows)]
+mod history_crypt;
 mod paste;
 #[cfg(windows)]
 mod polling_hotkey;
