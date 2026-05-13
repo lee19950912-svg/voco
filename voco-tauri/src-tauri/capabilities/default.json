@@ -1,16 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for VoCo main + HUD windows",
-  "windows": ["main", "hud"],
+  "description": "Capabilities for the main VoCo window (settings, history, etc.)",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
     "core:window:default",
     "core:window:allow-show",
     "core:window:allow-hide",
-    "core:window:allow-set-position",
-    "core:window:allow-set-size",
     "core:window:allow-set-focus",
     "core:webview:default",
     "core:tray:default",

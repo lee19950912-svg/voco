@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hud",
+  "description": "Capabilities for the HUD overlay window — display-only, no clipboard or filesystem access.",
+  "windows": ["hud"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size"
+  ]
+}

@@ -20,6 +20,7 @@
 
 #![cfg(windows)]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,8 +33,14 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use crate::config::AppConfig;
 use crate::voice_engine::{ErrorPayload, VoiceEngine};
 
-pub fn spawn(app: AppHandle, engine: Arc<VoiceEngine>) {
-    std::thread::spawn(move || run(app, engine));
+/// Spawns the polling loop on a dedicated OS thread. Returns a flag the
+/// caller can flip to `true` to ask the loop to exit cleanly — the loop
+/// observes the flag once per 20 ms cycle.
+pub fn spawn(app: AppHandle, engine: Arc<VoiceEngine>) -> Arc<AtomicBool> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_for_thread = stop.clone();
+    std::thread::spawn(move || run(app, engine, stop_for_thread));
+    stop
 }
 
 fn key_is_down(vk: u16) -> bool {
@@ -71,7 +78,7 @@ fn vk_from_code(code: &str) -> Option<u16> {
     Some(vk)
 }
 
-fn run(app: AppHandle, engine: Arc<VoiceEngine>) {
+fn run(app: AppHandle, engine: Arc<VoiceEngine>, stop: Arc<AtomicBool>) {
     // Resolve hotkey codes from config — fall back to alt_r / shift_r if the
     // config strings are unrecognized. Changes require an app restart.
     let cfg = AppConfig::load().unwrap_or_default();
@@ -92,6 +99,10 @@ fn run(app: AppHandle, engine: Arc<VoiceEngine>) {
     // at release-time misses the modifier in the typical case.
     let mut translate_seen = false;
     loop {
+        if stop.load(Ordering::Relaxed) {
+            tracing::info!("polling_hotkey: stop signal received, exiting");
+            return;
+        }
         let alt_is_down = key_is_down(trigger_vk);
 
         if alt_is_down && !alt_was_down {

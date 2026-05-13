@@ -97,12 +97,17 @@ function App() {
   }, []);
 
   // First-run wizard takes over the whole window until the user finishes it.
+  // Wizard test recordings use `dry_run` and don't go into persisted history,
+  // but the App-level listener still captures them in the in-memory
+  // sessionHistory state. Clear it here so the wizard's test result doesn't
+  // appear on the home page after onboarding.
   if (cfg && !wizardDone) {
     return (
       <SetupWizard
         initialCfg={cfg as any}
         onDone={() => {
           setWizardDone(true);
+          setSessionHistory([]);
           invoke<VoCoConfig>("get_config")
             .then((c) => {
               setCfg(c);
@@ -118,9 +123,12 @@ function App() {
     <div className="flex h-screen text-[14px]">
       <aside className="w-[220px] bg-white border-r border-black/[0.06] flex flex-col">
         <div className="p-5 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-black grid place-items-center text-white text-base font-bold">
-            V
-          </div>
+          <img
+            src="/voco-logo.png"
+            alt="VoCo"
+            className="w-9 h-9 rounded-full"
+            draggable={false}
+          />
           <div className="flex flex-col">
             <span className="font-semibold tracking-wide">VoCo</span>
             <span className="text-[11px] text-black/45">v{version}</span>
@@ -355,20 +363,21 @@ function SettingsPage({
 
       <Card title="快捷键 与 触发">
         <Row label="录音键（按住=润色）">
-          <input
+          <KeyCapture
             value={cfg.trigger_polish}
-            onChange={(e) => update("trigger_polish", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[220px]"
+            onChange={(v) => update("trigger_polish", v)}
           />
         </Row>
         <Row label="翻译附加键">
-          <input
+          <KeyCapture
             value={cfg.trigger_translate_modifier}
-            onChange={(e) =>
-              update("trigger_translate_modifier", e.target.value)
-            }
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[220px]"
+            onChange={(v) => update("trigger_translate_modifier", v)}
           />
+        </Row>
+        <Row label="">
+          <span className="text-[11px] text-black/45">
+            改完快捷键后重启 VoCo 才会生效。
+          </span>
         </Row>
         <Row label="翻译目标语言">
           <select
@@ -554,7 +563,76 @@ function prettyKey(code: string | undefined): string {
     shift_l: "左 Shift",
     caps_lock: "CapsLock",
   };
-  return m[code] || code;
+  if (m[code]) return m[code];
+  if (/^f([1-9]|1[0-2])$/.test(code)) return code.toUpperCase();
+  return code;
+}
+
+// Map browser KeyboardEvent.code → our backend config string. Only keys the
+// Rust hotkey poller actually recognizes are returned; everything else maps
+// to null (component rejects the input and asks again).
+function codeFromKeyboardEvent(e: KeyboardEvent): string | null {
+  switch (e.code) {
+    case "AltRight":
+      return "alt_r";
+    case "AltLeft":
+      return "alt_l";
+    case "ControlRight":
+      return "ctrl_r";
+    case "ControlLeft":
+      return "ctrl_l";
+    case "ShiftRight":
+      return "shift_r";
+    case "ShiftLeft":
+      return "shift_l";
+    case "CapsLock":
+      return "caps_lock";
+    default:
+      if (/^F([1-9]|1[0-2])$/.test(e.code)) return e.code.toLowerCase();
+      return null;
+  }
+}
+
+function KeyCapture({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!capturing) return;
+    function onKey(e: KeyboardEvent) {
+      e.preventDefault();
+      if (e.code === "Escape") {
+        setCapturing(false);
+        return;
+      }
+      const mapped = codeFromKeyboardEvent(e);
+      if (mapped) {
+        onChange(mapped);
+        setCapturing(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [capturing, onChange]);
+
+  return (
+    <button
+      onClick={() => setCapturing(true)}
+      className={
+        "inline-flex items-center justify-center min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
+        (capturing
+          ? "bg-blue-50 border border-blue-300 text-blue-700 animate-pulse"
+          : "bg-white border border-black/15 text-black/75 hover:bg-black/5")
+      }
+    >
+      {capturing ? "请按下任意键…（Esc 取消）" : prettyKey(value)}
+    </button>
+  );
 }
 
 export default App;

@@ -65,14 +65,21 @@ impl VoiceEngine {
     }
 
     pub async fn start_recording(&self, app: &AppHandle) -> Result<()> {
+        // Race guard: if a session is already in progress (e.g., the user
+        // hammered the hotkey, or a UI button + hotkey both fired), just
+        // return. The existing session keeps running. Without this, two
+        // concurrent cpal streams could open and the second one would
+        // silently overwrite the first.
+        {
+            let slot = self.recorder.lock().await;
+            if slot.is_some() {
+                tracing::debug!("start_recording: session already active, ignoring duplicate");
+                return Ok(());
+            }
+        }
+
         let cfg = AppConfig::load().unwrap_or_default();
         let device_name = cfg.input_device.clone();
-
-        // Drop any lingering session before opening a new one.
-        {
-            let mut slot = self.recorder.lock().await;
-            slot.take();
-        }
 
         // RecordingSession::start is sync (spawns its own thread + blocks
         // until the cpal stream is ready). Run on spawn_blocking so we don't
@@ -82,7 +89,18 @@ impl VoiceEngine {
             .await
             .map_err(|e| anyhow!("启动录音任务出错: {e}"))?
             .map_err(|e| anyhow!("打开麦克风失败: {e}"))?;
-        *self.recorder.lock().await = Some(rec);
+
+        // Re-check the slot before inserting — a parallel call could have
+        // raced past the early-return above before we finished opening the
+        // mic. If somehow another session is there now, drop ours.
+        let mut slot = self.recorder.lock().await;
+        if slot.is_some() {
+            tracing::debug!("start_recording: lost race for slot, dropping new session");
+            drop(rec);
+            return Ok(());
+        }
+        *slot = Some(rec);
+        drop(slot);
 
         // HUD: show + listening state.
         let _ = app.emit("hud:state", StatePayload { state: "listening" });
@@ -112,6 +130,18 @@ impl VoiceEngine {
     }
 
     pub async fn stop_and_process(&self, app: &AppHandle, mode: &str) -> Result<()> {
+        self.stop_and_process_with_options(app, mode, false).await
+    }
+
+    /// Same as `stop_and_process`, but `dry_run = true` skips persisting the
+    /// session to history — used by the setup wizard's test recording so it
+    /// doesn't pollute the user's real input history.
+    pub async fn stop_and_process_with_options(
+        &self,
+        app: &AppHandle,
+        mode: &str,
+        dry_run: bool,
+    ) -> Result<()> {
         // Stop the level pump.
         if let Some(task) = self.level_task.lock().await.take() {
             task.abort();
@@ -143,29 +173,33 @@ impl VoiceEngine {
         let started = Instant::now();
         tokio::spawn(async move {
             let _guard = lock.lock().await;
-            match process_pipeline(wav_bytes, &mode).await {
+            match process_pipeline(wav_bytes, &mode, dry_run).await {
                 Ok(outcome) => {
                     let (payload, warn_msg) = match outcome {
                         PipelineOutcome::Ok(p) => (p, None),
                         PipelineOutcome::Warning { payload, message } => (payload, Some(message)),
                     };
                     // Persist session to history before broadcasting result.
-                    let cfg = AppConfig::load().unwrap_or_default();
-                    let session = Session {
-                        at: Utc::now(),
-                        mode: payload.mode.clone(),
-                        raw: payload.raw.clone(),
-                        text: payload.text.clone(),
-                        translate_target: if payload.mode == "translate" {
-                            Some(cfg.translate_target.clone())
-                        } else {
-                            None
-                        },
-                        duration_ms: started.elapsed().as_millis() as u64,
-                    };
-                    let mut h = History::load();
-                    h.push(session);
-                    let _ = h.save();
+                    // Skipped during dry-run (wizard test) so it doesn't show
+                    // up in the user's real history.
+                    if !dry_run {
+                        let cfg = AppConfig::load().unwrap_or_default();
+                        let session = Session {
+                            at: Utc::now(),
+                            mode: payload.mode.clone(),
+                            raw: payload.raw.clone(),
+                            text: payload.text.clone(),
+                            translate_target: if payload.mode == "translate" {
+                                Some(cfg.translate_target.clone())
+                            } else {
+                                None
+                            },
+                            duration_ms: started.elapsed().as_millis() as u64,
+                        };
+                        let mut h = History::load();
+                        h.push(session);
+                        let _ = h.save();
+                    }
                     let _ = app_for_task.emit("voco:result", payload);
                     if let Some(msg) = warn_msg {
                         let _ = app_for_task.emit("voco:error", ErrorPayload { message: msg });
@@ -200,7 +234,11 @@ pub enum PipelineOutcome {
     },
 }
 
-async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<PipelineOutcome> {
+async fn process_pipeline(
+    wav_bytes: Vec<u8>,
+    mode: &str,
+    dry_run: bool,
+) -> Result<PipelineOutcome> {
     let cfg = AppConfig::load()?;
     let keys = ApiKeys::from_env();
 
@@ -293,13 +331,17 @@ async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<PipelineOutc
     };
 
     // Paste step. If this fails the user got nothing usable — hard error.
-    let to_paste = final_text.clone();
-    match tokio::task::spawn_blocking(move || paste_text(&to_paste)).await {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => {
-            return Err(anyhow!("粘贴失败：{e}（请确保光标位于可输入位置）"));
+    // Skipped during dry-run (wizard test) since the user isn't focused on
+    // a text field and pasting would go nowhere useful.
+    if !dry_run {
+        let to_paste = final_text.clone();
+        match tokio::task::spawn_blocking(move || paste_text(&to_paste)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                return Err(anyhow!("粘贴失败：{e}（请确保光标位于可输入位置）"));
+            }
+            Err(e) => return Err(anyhow!("粘贴任务异常：{e}")),
         }
-        Err(e) => return Err(anyhow!("粘贴任务异常：{e}")),
     }
 
     let payload = ResultPayload {

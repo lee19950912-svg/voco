@@ -25,11 +25,12 @@ use config::AppConfig;
 use stats::{History, Stats};
 use voice_engine::VoiceEngine;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Manager, RunEvent,
 };
 
 // ----------------- Tauri commands -----------------
@@ -74,13 +75,37 @@ fn get_config_dir() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Reports which API keys are currently visible to the app — without
+/// revealing the actual key values. Used by the setup wizard to show
+/// configuration status.
+#[derive(serde::Serialize)]
+struct ApiKeyStatus {
+    volc: bool,
+    deepseek: bool,
+    relay: bool,
+    openai: bool,
+}
+
+#[tauri::command]
+fn check_api_keys() -> ApiKeyStatus {
+    let k = config::ApiKeys::from_env();
+    ApiKeyStatus {
+        volc: !k.volc_app_id.is_empty() && !k.volc_access_token.is_empty(),
+        deepseek: !k.deepseek.is_empty(),
+        relay: !k.relay.is_empty(),
+        openai: !k.openai.is_empty(),
+    }
+}
+
 /// Manual trigger for the recording pipeline — used by the setup wizard's
 /// "record a test sample" flow. Records for 3 s, then runs the chosen mode.
+/// `dry_run` skips persisting the session to history (wizard tests).
 #[tauri::command]
 async fn manual_recognize(
     app: AppHandle,
     state: tauri::State<'_, Arc<VoiceEngine>>,
     mode: String,
+    dry_run: Option<bool>,
 ) -> Result<(), String> {
     state
         .start_recording(&app)
@@ -88,10 +113,15 @@ async fn manual_recognize(
         .map_err(|e| e.to_string())?;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     state
-        .stop_and_process(&app, &mode)
+        .stop_and_process_with_options(&app, &mode, dry_run.unwrap_or(false))
         .await
         .map_err(|e| e.to_string())
 }
+
+/// Tauri-managed wrapper around the polling-hotkey stop flag, so we can flip
+/// it from the RunEvent::Exit handler.
+#[cfg(windows)]
+struct HotkeyStop(Arc<AtomicBool>);
 
 // ----------------- Tray icon -----------------
 
@@ -206,7 +236,8 @@ pub fn run() {
             get_history,
             get_stats,
             clear_history,
-            get_config_dir
+            get_config_dir,
+            check_api_keys
         ])
         .setup(move |app| {
             // System tray.
@@ -215,8 +246,12 @@ pub fn run() {
             }
 
             // Bare-Alt hotkey via Windows polling (bypasses hook blockers).
+            // Stash the stop signal in app state so we can flip it on Exit.
             #[cfg(windows)]
-            polling_hotkey::spawn(app.handle().clone(), engine.clone());
+            {
+                let stop = polling_hotkey::spawn(app.handle().clone(), engine.clone());
+                app.manage(HotkeyStop(stop));
+            }
 
             // Show main window — also closes the splash phase.
             if let Some(w) = app.get_webview_window("main") {
@@ -239,6 +274,17 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // On exit, ask the polling hotkey thread to stop. Without this it
+            // keeps running for up to 20ms after the app dies and may emit
+            // events into a torn-down AppHandle.
+            if matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+                #[cfg(windows)]
+                if let Some(stop) = app_handle.try_state::<HotkeyStop>() {
+                    stop.0.store(true, Ordering::Relaxed);
+                }
+            }
+        });
 }
