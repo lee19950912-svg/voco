@@ -1,20 +1,32 @@
 @import "tailwindcss";
 
-/* VoCo design tokens (electric blue + near-black ink, matching old PyQt look) */
+/* VoCo design tokens — soft, premium, blue-accented. */
 :root {
-  --voco-blue: #2563eb;
-  --voco-ink: #0a0a0b;
-  --voco-canvas: #f7f8fa;
-  --voco-line: rgba(0, 0, 0, 0.08);
+  --voco-accent: #4A90E2;
+  --voco-accent-soft: #EAF2FD;
+  --voco-ink: #0A0A0B;
+  --voco-canvas: #FFFFFF;
+  --voco-surface: #FFFFFF;
+  --voco-line: rgba(10, 10, 11, 0.06);
   --voco-muted: rgba(10, 10, 11, 0.55);
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei",
-    "Segoe UI", system-ui, sans-serif;
+  --voco-subtle: rgba(10, 10, 11, 0.40);
+
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
+    -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+
+/* Geist Mono fallback chain for keycaps / numbers. */
+.voco-mono {
+  font-family: "Geist Mono", "JetBrains Mono", "SF Mono", "Cascadia Mono",
+    Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 html, body, #root { height: 100%; }
 body {
   margin: 0;
-  background: var(--voco-canvas);
+  background: #FAFBFC;
   color: var(--voco-ink);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

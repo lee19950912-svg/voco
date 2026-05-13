@@ -4,16 +4,37 @@ import { listen } from "@tauri-apps/api/event";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { check as checkForUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import {
+  Home,
+  Clock,
+  BookOpen,
+  Settings as SettingsIcon,
+  FileText,
+  PenLine,
+  BarChart3,
+  Languages,
+  ChevronRight,
+  Copy,
+  Check,
+  Trash2,
+  Search,
+  Mic,
+  Power,
+  Info,
+  Keyboard,
+  Plus,
+  type LucideIcon,
+} from "lucide-react";
 import { SetupWizard } from "./SetupWizard";
 import "./App.css";
 
 type Page = "home" | "history" | "dictionary" | "settings";
 
-const NAV: { id: Page; label: string; icon: string }[] = [
-  { id: "home", label: "概览", icon: "🏠" },
-  { id: "history", label: "历史", icon: "🕘" },
-  { id: "dictionary", label: "词典", icon: "📖" },
-  { id: "settings", label: "设置", icon: "⚙️" },
+const NAV: { id: Page; label: string; Icon: LucideIcon }[] = [
+  { id: "home", label: "概览", Icon: Home },
+  { id: "history", label: "历史", Icon: Clock },
+  { id: "dictionary", label: "词典", Icon: BookOpen },
+  { id: "settings", label: "设置", Icon: SettingsIcon },
 ];
 
 interface VoCoResult {
@@ -131,39 +152,43 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen text-[14px]">
-      <aside className="w-[220px] bg-white border-r border-black/[0.06] flex flex-col">
-        <div className="p-5 flex items-center gap-3">
+    <div className="flex h-screen text-[14px] bg-[#FAFBFC]">
+      <aside className="w-[220px] bg-white border-r border-black/[0.05] flex flex-col">
+        <div className="px-5 pt-6 pb-4 flex items-center gap-3">
           <img
             src="/voco-logo.png"
             alt="VoCo"
-            className="w-9 h-9 rounded-full"
+            className="w-11 h-11 rounded-[10px]"
             draggable={false}
           />
-          <div className="flex flex-col">
-            <span className="font-semibold tracking-wide">VoCo</span>
-            <span className="text-[11px] text-black/45">v{version}</span>
+          <div className="flex flex-col leading-tight">
+            <span className="font-semibold text-[15px] tracking-wide">VoCo</span>
+            <span className="text-[11px] text-black/40 voco-mono">v{version}</span>
           </div>
         </div>
-        <nav className="flex-1 px-2">
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => setPage(n.id)}
-              className={
-                "w-full text-left px-4 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors " +
-                (page === n.id
-                  ? "bg-blue-50 text-blue-600"
-                  : "hover:bg-black/5 text-black/75")
-              }
-            >
-              <span>{n.icon}</span>
-              <span>{n.label}</span>
-            </button>
-          ))}
+        <nav className="flex-1 px-3 mt-2">
+          {NAV.map((n) => {
+            const active = page === n.id;
+            return (
+              <button
+                key={n.id}
+                onClick={() => setPage(n.id)}
+                className={
+                  "w-full text-left px-3 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors text-[14px] " +
+                  (active
+                    ? "bg-[#EAF2FD] text-[#4A90E2] font-medium"
+                    : "hover:bg-black/[0.04] text-black/70")
+                }
+              >
+                <n.Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
+                <span>{n.label}</span>
+              </button>
+            );
+          })}
         </nav>
-        <div className="px-4 py-3 text-[11px] text-black/45 border-t border-black/[0.06]">
-          就绪 · {engineStatus}
+        <div className="px-5 py-4 text-[12px] text-black/45 border-t border-black/[0.05] flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span>{engineStatus}</span>
         </div>
       </aside>
 
@@ -175,6 +200,7 @@ function App() {
             stats={stats}
             lastError={lastError}
             onDismissError={() => setLastError("")}
+            onViewAllHistory={() => setPage("history")}
           />
         )}
         {page === "history" && (
@@ -200,34 +226,40 @@ function HomePage({
   stats,
   lastError,
   onDismissError,
+  onViewAllHistory,
 }: {
   cfg: VoCoConfig | null;
   sessionHistory: VoCoResult[];
   stats: VoCoStats;
   lastError: string;
   onDismissError: () => void;
+  onViewAllHistory: () => void;
 }) {
-  const sessionChars = sessionHistory.reduce((sum, r) => sum + r.text.length, 0);
   const targetLabel =
     TARGET_LANG_LABEL[cfg?.translate_target ?? "ko"] ?? cfg?.translate_target;
   return (
-    <div className="p-10">
-      <h1 className="text-[34px] font-semibold tracking-tight">
-        说出来，写下来
-      </h1>
-      <p className="mt-3 text-black/55">
-        按住 <Kbd>{prettyKey(cfg?.trigger_polish)}</Kbd> 说话 — VoCo 自动把你说的话写到光标位置。
-      </p>
-      <p className="mt-1 text-black/55">
-        同时按 <Kbd>{prettyKey(cfg?.trigger_translate_modifier)}</Kbd> 翻译成{targetLabel}。
-      </p>
+    <div className="p-8 max-w-[1200px] mx-auto">
+      <section className="relative overflow-hidden rounded-[20px] border border-black/[0.05] bg-gradient-to-br from-[#F3F8FF] via-white to-[#EAF2FD] p-10 flex items-center gap-6">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[36px] font-semibold tracking-tight leading-[1.15]">
+            说出来，写下来
+          </h1>
+          <p className="mt-5 text-[14px] text-black/60 leading-relaxed">
+            按住 <Keycap>{prettyKey(cfg?.trigger_polish)}</Keycap> 说话 — VoCo 自动把你说的话写到光标位置。
+          </p>
+          <p className="mt-2.5 text-[14px] text-black/60 leading-relaxed">
+            同时按 <Keycap>{prettyKey(cfg?.trigger_translate_modifier)}</Keycap> 翻译成{targetLabel}。
+          </p>
+        </div>
+        <HeroIllustration />
+      </section>
 
       {lastError && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3">
+        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3">
           <span className="flex-1">⚠️ {friendlyError(lastError)}</span>
           <button
             onClick={onDismissError}
-            className="text-red-700/60 hover:text-red-700 text-lg leading-none"
+            className="text-red-700/60 hover:text-red-700 text-lg leading-none px-1"
             aria-label="关闭"
           >
             ×
@@ -235,26 +267,138 @@ function HomePage({
         </div>
       )}
 
-      <div className="mt-10 grid grid-cols-4 gap-4">
-        <Metric label="本次字数" value={String(sessionChars)} />
-        <Metric label="今日字数" value={String(stats.today_chars)} />
-        <Metric label="累计字数" value={String(stats.total_chars)} />
-        <Metric label="翻译次数" value={String(stats.translate_count)} />
+      <div className="mt-6 grid grid-cols-4 gap-4">
+        <StatCard Icon={FileText} value={sessionHistory.length} label="本次次数" />
+        <StatCard Icon={PenLine} value={stats.today_chars} label="今日字数" />
+        <StatCard Icon={BarChart3} value={stats.total_chars} label="累计字数" />
+        <StatCard Icon={Languages} value={stats.translate_count} label="翻译次数" />
       </div>
 
-      <div className="mt-10 rounded-2xl border border-black/[0.06] bg-white p-6">
-        <div className="text-sm font-medium">最近识别</div>
-        <div className="mt-3 space-y-3">
-          {sessionHistory.length === 0 && (
-            <div className="text-black/45 text-sm">
-              还没有记录 — 按住快捷键说点什么试试。
-            </div>
-          )}
-          {sessionHistory.slice(0, 5).map((r, i) => (
-            <ResultRow key={i} r={r} />
-          ))}
+      <section className="mt-6 rounded-[16px] border border-black/[0.05] bg-white p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 text-[14px] font-medium text-black/85">
+            <Clock size={16} strokeWidth={1.8} className="text-black/55" />
+            最近识别
+          </div>
+          <button
+            onClick={onViewAllHistory}
+            className="text-[13px] text-[#4A90E2] hover:text-[#357ABD] flex items-center gap-1 transition-colors"
+          >
+            查看全部
+            <ChevronRight size={14} strokeWidth={2} />
+          </button>
+        </div>
+
+        {sessionHistory.length === 0 ? (
+          <EmptyRecognition />
+        ) : (
+          <div className="mt-5 space-y-3">
+            {sessionHistory.slice(0, 5).map((r, i) => (
+              <ResultRow key={i} r={r} />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StatCard({
+  Icon,
+  value,
+  label,
+}: {
+  Icon: LucideIcon;
+  value: number;
+  label: string;
+}) {
+  return (
+    <div className="rounded-[14px] border border-black/[0.05] bg-white p-5 transition-shadow hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)]">
+      <div className="w-9 h-9 rounded-lg bg-[#EAF2FD] flex items-center justify-center text-[#4A90E2]">
+        <Icon size={18} strokeWidth={1.8} />
+      </div>
+      <div className="mt-4 text-[28px] font-semibold leading-none voco-mono">
+        {value.toLocaleString("en-US")}
+      </div>
+      <div className="mt-2 text-[12px] text-black/45">{label}</div>
+    </div>
+  );
+}
+
+function Keycap({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="voco-mono inline-flex items-center px-2 py-0.5 rounded-md bg-[#EAF2FD] text-[#4A90E2] text-[12px] font-medium mx-0.5 border border-[#4A90E2]/15">
+      {children}
+    </kbd>
+  );
+}
+
+function EmptyRecognition() {
+  return (
+    <div className="mt-6 mb-4 flex flex-col items-center justify-center py-8 text-center">
+      <div className="relative">
+        <FileText size={48} strokeWidth={1.2} className="text-black/15" />
+        <PenLine
+          size={20}
+          strokeWidth={1.8}
+          className="text-[#4A90E2] absolute -right-2 -bottom-1"
+        />
+      </div>
+      <div className="mt-4 text-[14px] text-black/70 font-medium">还没有记录</div>
+      <div className="mt-1 text-[12px] text-black/40">
+        按住快捷键说点什么试试吧。
+      </div>
+    </div>
+  );
+}
+
+function HeroIllustration() {
+  // Fixed-size, non-shrinking illustration. Sits in a flex row with the text
+  // — that gives the text a real flex-1 column and avoids the overlap we'd
+  // get with absolute positioning at narrow window widths.
+  return (
+    <div
+      className="relative shrink-0 w-[320px] h-[200px] pointer-events-none select-none"
+      aria-hidden="true"
+    >
+      <div className="absolute right-[40px] top-[20px] w-[160px] h-[160px] rounded-full bg-[#4A90E2]/[0.08] blur-2xl" />
+      <div className="absolute right-[20px] top-[60px] w-[120px] h-[120px] rounded-full bg-white/80 blur-xl" />
+
+      <div className="absolute right-[60px] top-[20px] w-[140px] h-[140px] rounded-full bg-gradient-to-br from-white to-[#DCE9F8] shadow-[0_18px_40px_-12px_rgba(74,144,226,0.35)] flex items-center justify-center border border-white">
+        <div className="w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[#6FA8E8] to-[#4A90E2] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)]">
+          <Mic size={36} strokeWidth={2} className="text-white" />
         </div>
       </div>
+
+      <div className="absolute left-[4px] top-[58px] w-[68px] h-[58px] rounded-2xl bg-gradient-to-br from-white to-[#E5EFFB] shadow-[0_10px_24px_-8px_rgba(74,144,226,0.30)] flex items-center justify-center border border-white">
+        <svg width="34" height="22" viewBox="0 0 34 22" fill="none">
+          {[2, 7, 12, 17, 22, 27, 32].map((x, i) => {
+            const heights = [6, 12, 18, 22, 16, 10, 6];
+            return (
+              <rect
+                key={i}
+                x={x - 1.5}
+                y={(22 - heights[i]) / 2}
+                width="3"
+                height={heights[i]}
+                rx="1.5"
+                fill="#4A90E2"
+              />
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="absolute right-[2px] top-[78px] w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-white to-[#E5EFFB] shadow-[0_10px_24px_-8px_rgba(74,144,226,0.30)] flex items-center justify-center border border-white">
+        <span className="text-[#4A90E2] font-semibold text-[22px] voco-mono">
+          A
+        </span>
+      </div>
+
+      <div className="absolute right-[30px] top-[10px] w-1.5 h-1.5 rounded-full bg-[#4A90E2]/30" />
+      <div className="absolute right-0 top-[50px] w-1 h-1 rounded-full bg-[#4A90E2]/40" />
+      <div className="absolute left-[78px] top-[20px] w-1 h-1 rounded-full bg-[#4A90E2]/40" />
+      <div className="absolute left-[58px] top-[170px] w-1.5 h-1.5 rounded-full bg-[#4A90E2]/25" />
     </div>
   );
 }
@@ -300,27 +444,35 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
     : sessions;
 
   return (
-    <div className="p-10">
+    <div className="p-8 max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-[28px] font-semibold tracking-tight">历史</h1>
         {sessions.length > 0 && (
           <button
             onClick={clearAll}
-            className="text-sm text-black/55 hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+            className="text-[13px] text-black/55 hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1.5"
           >
+            <Trash2 size={14} strokeWidth={1.8} />
             清空记录
           </button>
         )}
       </div>
 
       {sessions.length > 0 && (
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索历史…"
-          className="mt-5 w-full border border-black/15 rounded-lg px-3 py-2 text-sm"
-        />
+        <div className="mt-5 relative">
+          <Search
+            size={16}
+            strokeWidth={1.8}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索历史…"
+            className="w-full border border-black/[0.08] bg-white rounded-lg pl-9 pr-3 py-2.5 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
+          />
+        </div>
       )}
 
       <div className="mt-6 space-y-3">
@@ -380,13 +532,13 @@ function DictionaryPage() {
   }
 
   return (
-    <div className="p-10 max-w-3xl">
+    <div className="p-8 max-w-[1200px] mx-auto">
       <h1 className="text-[28px] font-semibold tracking-tight">词典</h1>
-      <p className="mt-3 text-black/55">
+      <p className="mt-3 text-[14px] text-black/55">
         把你常说的专有名词、人名、公司名加进来。VoCo 会在润色时优先用这里的写法，避免被识别错。
       </p>
 
-      <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-6">
+      <Card title="添加词条" icon={<Plus size={16} strokeWidth={1.8} />}>
         <div className="flex gap-3">
           <input
             value={newTerm}
@@ -395,7 +547,7 @@ function DictionaryPage() {
               if (e.key === "Enter") addEntry();
             }}
             placeholder="词条，例如：李在镕"
-            className="flex-1 border border-black/15 rounded-lg px-3 py-2 text-sm"
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
           />
           <input
             value={newNote}
@@ -404,43 +556,53 @@ function DictionaryPage() {
               if (e.key === "Enter") addEntry();
             }}
             placeholder="说明（可空）"
-            className="flex-1 border border-black/15 rounded-lg px-3 py-2 text-sm"
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
           />
           <button
             onClick={addEntry}
             disabled={!newTerm.trim()}
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+            className="bg-[#4A90E2] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#357ABD] transition-colors disabled:opacity-40"
           >
             添加
           </button>
         </div>
+      </Card>
 
-        <div className="mt-5 space-y-2">
-          {!loaded && <div className="text-black/45 text-sm">加载中…</div>}
+      <Card
+        title={`已收录 ${entries.length} 个`}
+        icon={<BookOpen size={16} strokeWidth={1.8} />}
+      >
+        <div className="space-y-1">
+          {!loaded && (
+            <div className="text-black/45 text-[13px] py-2">加载中…</div>
+          )}
           {loaded && entries.length === 0 && (
-            <div className="text-black/45 text-sm">还没有词条。</div>
+            <div className="text-black/45 text-[13px] py-2">
+              还没有词条 — 上面加一个试试。
+            </div>
           )}
           {entries.map((e, i) => (
             <div
               key={`${e.term}-${i}`}
-              className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-black/[0.02] group"
+              className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-black/[0.02] group"
             >
               <div className="flex-1">
-                <div className="text-sm font-medium text-black/85">{e.term}</div>
+                <div className="text-[13px] font-medium text-black/85">{e.term}</div>
                 {e.note && (
-                  <div className="text-xs text-black/45 mt-0.5">{e.note}</div>
+                  <div className="text-[11px] text-black/45 mt-0.5">{e.note}</div>
                 )}
               </div>
               <button
                 onClick={() => removeEntry(i)}
-                className="text-xs text-black/40 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-50"
+                className="text-[11px] text-black/40 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-50 flex items-center gap-1"
               >
+                <Trash2 size={12} strokeWidth={1.8} />
                 删除
               </button>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -482,17 +644,24 @@ function SettingsPage({
   }
 
   return (
-    <div className="p-10 max-w-3xl">
+    <div className="p-8 max-w-[1200px] mx-auto">
       <h1 className="text-[28px] font-semibold tracking-tight">设置</h1>
 
-      <Card title="麦克风">
+      <Card title="语音" icon={<Mic size={16} strokeWidth={1.8} />}>
         <Row label="使用的麦克风">
           <select
             value={cfg.input_device}
             onChange={(e) => update("input_device", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[280px]"
+            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[280px]"
           >
             <option value="">系统默认</option>
+            {/* If we've saved a device that isn't in the current `mics` list
+                (either because mics is still loading or the device was
+                unplugged), render it anyway so the <select> shows the right
+                label instead of falling back to the first option. */}
+            {cfg.input_device && !mics.includes(cfg.input_device) && (
+              <option value={cfg.input_device}>{cfg.input_device}</option>
+            )}
             {mics.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -500,9 +669,19 @@ function SettingsPage({
             ))}
           </select>
         </Row>
+        <Row label="说话的语言">
+          <select
+            value={cfg.recognize_language}
+            onChange={(e) => update("recognize_language", e.target.value)}
+            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[280px]"
+          >
+            <option value="zh">中文</option>
+            <option value="ko">韩语</option>
+          </select>
+        </Row>
       </Card>
 
-      <Card title="启动">
+      <Card title="启动" icon={<Power size={16} strokeWidth={1.8} />}>
         <Row label="开机自动启动 VoCo">
           <Toggle
             checked={!!autostart}
@@ -512,7 +691,7 @@ function SettingsPage({
         </Row>
       </Card>
 
-      <Card title="关于">
+      <Card title="关于" icon={<Info size={16} strokeWidth={1.8} />}>
         <Row label="版本">
           <span className="text-sm text-black/55">v0.1.0</span>
         </Row>
@@ -521,7 +700,7 @@ function SettingsPage({
         </Row>
       </Card>
 
-      <Card title="快捷键 与 触发">
+      <Card title="快捷键与触发" icon={<Keyboard size={16} strokeWidth={1.8} />}>
         <Row label="录音键（按住=润色）">
           <KeyCapture
             value={cfg.trigger_polish}
@@ -543,7 +722,7 @@ function SettingsPage({
           <select
             value={cfg.translate_target}
             onChange={(e) => update("translate_target", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[220px]"
+            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[220px]"
           >
             <option value="ko">韩语</option>
             <option value="en">英语</option>
@@ -553,69 +732,29 @@ function SettingsPage({
         </Row>
       </Card>
 
-      <Card title="引擎">
-        <Row label="识别引擎">
-          <select
-            value={cfg.recognize_engine}
-            onChange={(e) => update("recognize_engine", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[220px]"
-          >
-            <option value="volcengine">火山引擎（推荐）</option>
-            <option value="local">本地 SenseVoice</option>
-          </select>
-        </Row>
-        <Row label="润色模型">
-          <input
-            value={cfg.polish_model}
-            onChange={(e) => update("polish_model", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[280px]"
-          />
-        </Row>
-        <Row label="翻译模型">
-          <input
-            value={cfg.translate_model}
-            onChange={(e) => update("translate_model", e.target.value)}
-            className="border border-black/15 rounded-lg px-3 py-2 min-w-[280px]"
-          />
-        </Row>
-      </Card>
     </div>
   );
 }
 
 // ---------- Reusable bits ----------
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-black/[0.06] bg-white p-6">
-      <div className="text-[36px] font-semibold leading-none">{value}</div>
-      <div className="mt-2 text-xs text-black/55">{label}</div>
-    </div>
-  );
-}
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="inline-flex items-center px-2 py-0.5 rounded-md border border-black/[0.12] bg-white text-[12px] font-medium text-black/75 mx-0.5">
-      {children}
-    </kbd>
-  );
-}
-
 function Card({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white">
-      <div className="px-6 pt-5 pb-2 text-[10px] uppercase tracking-[1px] text-black/45 font-semibold">
-        {title}
+    <section className="mt-6 rounded-[16px] border border-black/[0.05] bg-white p-6">
+      <div className="flex items-center gap-2.5 text-[14px] font-medium text-black/85">
+        {icon && <span className="text-black/55">{icon}</span>}
+        <span>{title}</span>
       </div>
-      <div className="px-6 pb-5">{children}</div>
-    </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -627,8 +766,8 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-black/[0.06] last:border-b-0">
-      <div className="text-sm text-black/75">{label}</div>
+    <div className="flex items-center justify-between py-3 border-b border-black/[0.05] last:border-b-0">
+      <div className="text-[13px] text-black/70">{label}</div>
       <div>{children}</div>
     </div>
   );
@@ -636,13 +775,13 @@ function Row({
 
 function ResultRow({ r }: { r: VoCoResult }) {
   return (
-    <div className="rounded-xl border border-black/[0.06] p-3 group">
+    <div className="rounded-xl border border-black/[0.05] p-3 group">
       <div className="text-xs text-black/45 flex items-center gap-2 mb-1">
         <span
           className={
             "inline-block w-2 h-2 rounded-full " +
             (r.mode === "translate"
-              ? "bg-blue-500"
+              ? "bg-[#4A90E2]"
               : r.mode === "polish"
                 ? "bg-emerald-500"
                 : "bg-gray-400")
@@ -663,13 +802,13 @@ function SessionRow({ s }: { s: Session }) {
   const date = new Date(s.at);
   const ago = relativeTime(date);
   return (
-    <div className="rounded-xl border border-black/[0.06] p-3">
+    <div className="rounded-xl border border-black/[0.05] p-3">
       <div className="text-xs text-black/45 flex items-center gap-2 mb-1">
         <span
           className={
             "inline-block w-2 h-2 rounded-full " +
             (s.mode === "translate"
-              ? "bg-blue-500"
+              ? "bg-[#4A90E2]"
               : s.mode === "polish"
                 ? "bg-emerald-500"
                 : "bg-gray-400")
@@ -728,7 +867,7 @@ function UpdateChecker() {
       <button
         onClick={check}
         disabled={state === "checking" || state === "downloading"}
-        className="text-sm border border-black/15 px-4 py-1.5 rounded-lg hover:bg-black/5 disabled:opacity-40"
+        className="text-sm border border-black/[0.08] px-4 py-1.5 rounded-lg hover:bg-black/5 disabled:opacity-40"
       >
         {state === "checking"
           ? "检查中…"
@@ -758,13 +897,27 @@ function Toggle({
   disabled?: boolean;
   onChange: (next: boolean) => void;
 }) {
+  // Suppress CSS transitions on first paint so the toggle never animates from
+  // a stale state to its real one when async-loaded values arrive. Only
+  // animate user-driven changes (which happen after this flag flips true).
+  const [animate, setAnimate] = useState(false);
+  useEffect(() => {
+    // Two RAFs: first lets the initial state paint, second flips the flag
+    // after that paint commits — guarantees no transition on initial render.
+    const id = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setAnimate(true)),
+    );
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
     <button
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
       className={
-        "relative inline-flex items-center w-11 h-6 rounded-full transition-colors " +
-        (checked ? "bg-blue-600" : "bg-black/15") +
+        "relative inline-flex items-center w-11 h-6 rounded-full " +
+        (animate ? "transition-colors " : "") +
+        (checked ? "bg-[#4A90E2]" : "bg-black/15") +
         (disabled ? " opacity-50 cursor-not-allowed" : " cursor-pointer")
       }
       role="switch"
@@ -772,7 +925,8 @@ function Toggle({
     >
       <span
         className={
-          "absolute h-5 w-5 bg-white rounded-full transition-transform shadow-sm " +
+          "absolute h-5 w-5 bg-white rounded-full shadow-sm " +
+          (animate ? "transition-transform " : "") +
           (checked ? "translate-x-[22px]" : "translate-x-[2px]")
         }
       />
@@ -791,12 +945,22 @@ function CopyButton({ text }: { text: string }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         } catch {
-          // Clipboard may fail in odd contexts — fail quietly.
+          /* clipboard may fail in odd contexts — fail quietly */
         }
       }}
-      className="text-[11px] text-black/45 hover:text-black/75 px-2 py-0.5 rounded hover:bg-black/5"
+      className="text-[11px] text-black/45 hover:text-black/75 px-2 py-0.5 rounded hover:bg-black/5 flex items-center gap-1"
     >
-      {copied ? "已复制" : "复制"}
+      {copied ? (
+        <>
+          <Check size={12} strokeWidth={2.2} className="text-emerald-600" />
+          <span>已复制</span>
+        </>
+      ) : (
+        <>
+          <Copy size={12} strokeWidth={1.8} />
+          <span>复制</span>
+        </>
+      )}
     </button>
   );
 }
@@ -902,8 +1066,8 @@ function KeyCapture({
       className={
         "inline-flex items-center justify-center min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
         (capturing
-          ? "bg-blue-50 border border-blue-300 text-blue-700 animate-pulse"
-          : "bg-white border border-black/15 text-black/75 hover:bg-black/5")
+          ? "bg-[#EAF2FD] border border-[#4A90E2]/40 text-[#4A90E2] animate-pulse"
+          : "bg-white border border-black/[0.08] text-black/75 hover:bg-black/[0.04]")
       }
     >
       {capturing ? "请按下任意键…（Esc 取消）" : prettyKey(value)}

@@ -112,7 +112,7 @@ export function SetupWizard({
 
   return (
     <div className="h-screen flex items-center justify-center bg-white">
-      <div className="w-[600px] p-12 rounded-2xl border border-black/[0.06] shadow-sm">
+      <div className="w-[600px] p-12 rounded-2xl border border-black/[0.05] shadow-sm">
         <Steps step={step} total={TOTAL_STEPS} />
 
         {step === 1 && (
@@ -120,7 +120,7 @@ export function SetupWizard({
             <img
               src="/voco-logo.png"
               alt="VoCo"
-              className="w-16 h-16 mx-auto rounded-full"
+              className="w-16 h-16 mx-auto rounded-2xl"
               draggable={false}
             />
             <h1 className="mt-6 text-center text-2xl font-semibold">
@@ -149,13 +149,13 @@ export function SetupWizard({
               <button
                 onClick={openConfigFolder}
                 disabled={!configDir}
-                className="text-sm px-3 py-1.5 rounded-lg border border-black/15 hover:bg-black/5 disabled:opacity-40"
+                className="text-sm px-3 py-1.5 rounded-lg border border-black/[0.08] hover:bg-black/5 disabled:opacity-40"
               >
                 打开文件夹
               </button>
               <button
                 onClick={refreshKeys}
-                className="text-sm px-3 py-1.5 rounded-lg border border-black/15 hover:bg-black/5"
+                className="text-sm px-3 py-1.5 rounded-lg border border-black/[0.08] hover:bg-black/5"
               >
                 重新检查
               </button>
@@ -184,7 +184,7 @@ export function SetupWizard({
             <select
               value={cfg.input_device}
               onChange={(e) => update("input_device", e.target.value)}
-              className="mt-5 w-full border border-black/15 rounded-lg px-3 py-2"
+              className="mt-5 w-full border border-black/[0.08] rounded-lg px-3 py-2"
             >
               <option value="">系统默认</option>
               {mics.map((m) => (
@@ -197,7 +197,7 @@ export function SetupWizard({
             <button
               onClick={runTest}
               disabled={recording}
-              className="mt-5 w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:bg-black/15"
+              className="mt-5 w-full bg-[#4A90E2] text-white py-2.5 rounded-lg font-medium hover:bg-[#357ABD] transition-colors disabled:bg-black/15"
             >
               {recording ? "录音中…（3 秒）" : "录一句话试识别"}
             </button>
@@ -229,14 +229,14 @@ export function SetupWizard({
               点下方按钮然后按一下你想用的键。可以之后再改。
             </p>
             <div className="mt-5 space-y-3">
-              <div className="flex items-center justify-between py-3 border-b border-black/[0.06]">
+              <div className="flex items-center justify-between py-3 border-b border-black/[0.05]">
                 <div className="text-sm text-black/75">按住录音 + 润色</div>
                 <KeyCapture
                   value={cfg.trigger_polish}
                   onChange={(v) => update("trigger_polish", v)}
                 />
               </div>
-              <div className="flex items-center justify-between py-3 border-b border-black/[0.06]">
+              <div className="flex items-center justify-between py-3 border-b border-black/[0.05]">
                 <div className="text-sm text-black/75">加按这个键时翻译</div>
                 <KeyCapture
                   value={cfg.trigger_translate_modifier}
@@ -248,7 +248,7 @@ export function SetupWizard({
                 <select
                   value={cfg.translate_target}
                   onChange={(e) => update("translate_target", e.target.value)}
-                  className="border border-black/15 rounded-lg px-3 py-2 min-w-[160px]"
+                  className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[160px]"
                 >
                   <option value="ko">韩语</option>
                   <option value="en">英语</option>
@@ -287,7 +287,7 @@ export function SetupWizard({
           </button>
           <button
             onClick={next}
-            className="bg-blue-600 text-white py-2.5 px-8 rounded-lg font-medium hover:bg-blue-700"
+            className="bg-[#4A90E2] text-white py-2.5 px-8 rounded-lg font-medium hover:bg-[#357ABD] transition-colors"
           >
             {step === TOTAL_STEPS ? "开始使用" : "下一步"}
           </button>
@@ -307,14 +307,14 @@ function Steps({ step, total }: { step: number; total: number }) {
             <div
               className={
                 "w-7 h-7 rounded-full grid place-items-center text-xs font-medium " +
-                (i <= step ? "bg-blue-600 text-white" : "bg-black/8 text-black/45")
+                (i <= step ? "bg-[#4A90E2] text-white" : "bg-black/8 text-black/45")
               }
             >
               {i}
             </div>
             {i < total && (
               <div
-                className={"w-8 h-px " + (i < step ? "bg-blue-600" : "bg-black/10")}
+                className={"w-8 h-px " + (i < step ? "bg-[#4A90E2]" : "bg-black/10")}
               />
             )}
           </div>
@@ -426,8 +426,8 @@ function KeyCapture({
       className={
         "inline-flex items-center justify-center min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
         (capturing
-          ? "bg-blue-50 border border-blue-300 text-blue-700 animate-pulse"
-          : "bg-white border border-black/15 text-black/75 hover:bg-black/5")
+          ? "bg-[#EAF2FD] border border-[#4A90E2]/40 text-[#4A90E2] animate-pulse"
+          : "bg-white border border-black/[0.08] text-black/75 hover:bg-black/[0.04]")
       }
     >
       {capturing ? "请按下任意键…（Esc 取消）" : prettyKey(value)}
