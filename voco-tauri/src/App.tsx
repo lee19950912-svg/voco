@@ -14,7 +14,6 @@ import {
   PenLine,
   BarChart3,
   Languages,
-  ChevronRight,
   Copy,
   Check,
   Trash2,
@@ -50,9 +49,6 @@ function App() {
   const [version, setVersion] = useState("");
   const [engineStatus, setEngineStatus] = useState("加载中…");
   const [cfg, setCfg] = useState<VoCoConfig | null>(null);
-  const [sessionHistory, setSessionHistory] = useState<VoCoResult[]>([]);
-  // Tracks total recognitions THIS session, independent of the 20-item
-  // display buffer above. Without this, "本次次数" freezes at 20.
   const [sessionCount, setSessionCount] = useState(0);
   const [stats, setStats] = useState<VoCoStats>({
     total_sessions: 0,
@@ -99,8 +95,7 @@ function App() {
       .catch(() => setAutostart(false));
 
     const unsubs: Array<() => void> = [];
-    listen<VoCoResult>("voco:result", (e) => {
-      setSessionHistory((h) => [e.payload, ...h].slice(0, 20));
+    listen<VoCoResult>("voco:result", (_e) => {
       setSessionCount((c) => c + 1);
       refreshStats();
     }).then((u) => unsubs.push(u));
@@ -114,17 +109,12 @@ function App() {
   }, []);
 
   // First-run wizard takes over the whole window until the user finishes it.
-  // Wizard test recordings use `dry_run` and don't go into persisted history,
-  // but the App-level listener still captures them in the in-memory
-  // sessionHistory state. Clear it here so the wizard's test result doesn't
-  // appear on the home page after onboarding.
   if (cfg && !wizardDone) {
     return (
       <SetupWizard
         initialCfg={cfg}
         onDone={() => {
           setWizardDone(true);
-          setSessionHistory([]);
           invoke<VoCoConfig>("get_config")
             .then((c) => {
               setCfg(c);
@@ -181,12 +171,10 @@ function App() {
         {page === "home" && (
           <HomePage
             cfg={cfg}
-            sessionHistory={sessionHistory}
             sessionCount={sessionCount}
             stats={stats}
             lastError={lastError}
             onDismissError={() => setLastError("")}
-            onViewAllHistory={() => setPage("history")}
           />
         )}
         {page === "history" && (
@@ -216,34 +204,30 @@ const TARGET_LANG_LABEL: Record<string, string> = {
 
 function HomePage({
   cfg,
-  sessionHistory,
   sessionCount,
   stats,
   lastError,
   onDismissError,
-  onViewAllHistory,
 }: {
   cfg: VoCoConfig | null;
-  sessionHistory: VoCoResult[];
   sessionCount: number;
   stats: VoCoStats;
   lastError: string;
   onDismissError: () => void;
-  onViewAllHistory: () => void;
 }) {
   const targetLabel =
     TARGET_LANG_LABEL[cfg?.translate_target ?? "ko"] ?? cfg?.translate_target;
   return (
-    <div className="p-8 max-w-[1200px] mx-auto">
-      <section className="relative overflow-hidden rounded-[20px] border border-black/[0.05] bg-gradient-to-br from-[#F3F8FF] via-white to-[#EAF2FD] p-10 flex items-center gap-6">
+    <div className="p-6 max-w-[1200px] mx-auto h-full flex flex-col min-h-0">
+      <section className="relative overflow-hidden rounded-[20px] border border-black/[0.05] bg-gradient-to-br from-[#F3F8FF] via-white to-[#EAF2FD] p-7 flex items-center gap-6 shrink-0">
         <div className="flex-1 min-w-0">
-          <h1 className="text-[36px] font-semibold tracking-tight leading-[1.15]">
+          <h1 className="text-[30px] font-semibold tracking-tight leading-[1.15]">
             说出来，写下来
           </h1>
-          <p className="mt-5 text-[14px] text-black/60 leading-relaxed">
+          <p className="mt-4 text-[13px] text-black/60 leading-relaxed">
             按住 <Keycap>{prettyKey(cfg?.trigger_polish)}</Keycap> 说话 — VoCo 自动把你说的话写到光标位置。
           </p>
-          <p className="mt-2.5 text-[14px] text-black/60 leading-relaxed">
+          <p className="mt-2 text-[13px] text-black/60 leading-relaxed">
             同时按 <Keycap>{prettyKey(cfg?.trigger_translate_modifier)}</Keycap> 翻译成{targetLabel}。
           </p>
         </div>
@@ -251,7 +235,7 @@ function HomePage({
       </section>
 
       {lastError && (
-        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3">
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3 shrink-0">
           <span className="flex-1">⚠️ {friendlyError(lastError)}</span>
           <button
             onClick={onDismissError}
@@ -263,40 +247,38 @@ function HomePage({
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-4 gap-4">
+      <div className="mt-5 grid grid-cols-2 grid-rows-2 gap-4 flex-1 min-h-0">
         <StatCard Icon={FileText} value={sessionCount} label="本次次数" />
         <StatCard Icon={PenLine} value={stats.today_chars} label="今日字数" />
         <StatCard Icon={BarChart3} value={stats.total_chars} label="累计字数" />
         <StatCard Icon={Languages} value={stats.translate_count} label="翻译次数" />
       </div>
 
-      <section className="mt-6 rounded-[16px] border border-black/[0.05] bg-white p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 text-[14px] font-medium text-black/85">
-            <Clock size={16} strokeWidth={1.8} className="text-black/55" />
-            最近识别
-          </div>
-          <button
-            onClick={onViewAllHistory}
-            className="text-[13px] text-[#4A90E2] hover:text-[#357ABD] flex items-center gap-1 transition-colors"
-          >
-            查看全部
-            <ChevronRight size={14} strokeWidth={2} />
-          </button>
-        </div>
+      <HomeTipBanner />
+    </div>
+  );
+}
 
-        {sessionHistory.length === 0 ? (
-          <EmptyRecognition />
-        ) : (
-          <div className="mt-5 space-y-3">
-            {sessionHistory.slice(0, 5).map((r, i) => (
-              // Prepend-only list — index is stable for any given (length, item) pair.
-              // Combine with raw prefix to disambiguate identical re-recognitions.
-              <ResultRow key={`${sessionHistory.length - i}-${r.raw.slice(0, 16)}`} r={r} />
-            ))}
-          </div>
-        )}
-      </section>
+function HomeTipBanner() {
+  // Rotating tips at the bottom of the overview. Mostly there to surface
+  // features users wouldn't discover from the home page alone (toggle mode,
+  // auto-mute, encryption, etc.) — passive onboarding.
+  const tips = [
+    "想要「按一下开始 / 再按一下结束」？设置 → 触发方式 → 切换模式",
+    "录音时电脑外放会自动静音，松手立刻恢复",
+    "翻译目标语言可在设置里换：韩 / 英 / 中 / 日 四选一",
+    "你的识别历史已用 Windows 加密存盘，只有你能解",
+    "改任何设置都立即生效，不需要重启 VoCo",
+  ];
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % tips.length), 7000);
+    return () => clearInterval(t);
+  }, [tips.length]);
+  return (
+    <div className="mt-4 shrink-0 px-5 py-3 rounded-xl border border-black/[0.04] bg-gradient-to-r from-[#F3F8FF] via-white to-[#EAF2FD] text-[12px] text-black/55 text-center flex items-center justify-center gap-2">
+      <span className="text-[#4A90E2]">💡</span>
+      <span>{tips[i]}</span>
     </div>
   );
 }
@@ -311,14 +293,16 @@ function StatCard({
   label: string;
 }) {
   return (
-    <div className="rounded-[14px] border border-black/[0.05] bg-white p-5 transition-shadow hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)]">
-      <div className="w-9 h-9 rounded-lg bg-[#EAF2FD] flex items-center justify-center text-[#4A90E2]">
-        <Icon size={18} strokeWidth={1.8} />
+    <div className="rounded-[18px] border border-black/[0.05] bg-white p-6 flex items-center gap-5 transition-shadow hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)] min-h-0">
+      <div className="w-14 h-14 rounded-2xl bg-[#EAF2FD] flex items-center justify-center text-[#4A90E2] shrink-0">
+        <Icon size={28} strokeWidth={1.8} />
       </div>
-      <div className="mt-4 text-[28px] font-semibold leading-none voco-mono">
-        {value.toLocaleString("zh-CN")}
+      <div className="min-w-0 flex-1">
+        <div className="text-[40px] font-semibold leading-none voco-mono">
+          {value.toLocaleString("zh-CN")}
+        </div>
+        <div className="mt-2 text-[13px] text-black/50">{label}</div>
       </div>
-      <div className="mt-2 text-[12px] text-black/45">{label}</div>
     </div>
   );
 }
@@ -328,25 +312,6 @@ function Keycap({ children }: { children: React.ReactNode }) {
     <kbd className="voco-mono inline-flex items-center px-2 py-0.5 rounded-md bg-[#EAF2FD] text-[#4A90E2] text-[12px] font-medium mx-0.5 border border-[#4A90E2]/15">
       {children}
     </kbd>
-  );
-}
-
-function EmptyRecognition() {
-  return (
-    <div className="mt-6 mb-4 flex flex-col items-center justify-center py-8 text-center">
-      <div className="relative">
-        <FileText size={48} strokeWidth={1.2} className="text-black/15" />
-        <PenLine
-          size={20}
-          strokeWidth={1.8}
-          className="text-[#4A90E2] absolute -right-2 -bottom-1"
-        />
-      </div>
-      <div className="mt-4 text-[14px] text-black/70 font-medium">还没有记录</div>
-      <div className="mt-1 text-[12px] text-black/40">
-        按住快捷键说点什么试试吧。
-      </div>
-    </div>
   );
 }
 
@@ -813,31 +778,6 @@ function Row({
     <div className="flex items-center justify-between py-3 border-b border-black/[0.05] last:border-b-0">
       <div className="text-[13px] text-black/70">{label}</div>
       <div>{children}</div>
-    </div>
-  );
-}
-
-function ResultRow({ r }: { r: VoCoResult }) {
-  return (
-    <div className="rounded-xl border border-black/[0.05] p-3 group">
-      <div className="text-xs text-black/45 flex items-center gap-2 mb-1">
-        <span
-          className={
-            "inline-block w-2 h-2 rounded-full " +
-            (r.mode === "translate"
-              ? "bg-[#4A90E2]"
-              : r.mode === "polish"
-                ? "bg-emerald-500"
-                : "bg-gray-400")
-          }
-        />
-        {r.mode === "translate" ? "翻译" : r.mode === "polish" ? "润色" : "原文"}
-        <CopyButton text={r.text} />
-      </div>
-      <div className="text-sm text-black/85">{r.text}</div>
-      {r.raw !== r.text && (
-        <div className="text-xs text-black/35 mt-1">原文: {r.raw}</div>
-      )}
     </div>
   );
 }
