@@ -19,6 +19,22 @@ interface VoCoResult {
   mode: string;
 }
 
+interface Session {
+  at: string;
+  mode: string;
+  raw: string;
+  text: string;
+  translate_target: string | null;
+  duration_ms: number;
+}
+
+interface VoCoStats {
+  total_sessions: number;
+  total_chars: number;
+  today_chars: number;
+  translate_count: number;
+}
+
 interface VoCoConfig {
   recognize_engine: string;
   recognize_language: string;
@@ -37,24 +53,39 @@ function App() {
   const [version] = useState("0.1.0");
   const [engineStatus, setEngineStatus] = useState("加载中…");
   const [cfg, setCfg] = useState<VoCoConfig | null>(null);
-  const [history, setHistory] = useState<VoCoResult[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<VoCoResult[]>([]);
+  const [stats, setStats] = useState<VoCoStats>({
+    total_sessions: 0,
+    total_chars: 0,
+    today_chars: 0,
+    translate_count: 0,
+  });
   const [lastError, setLastError] = useState<string>("");
   const [wizardDone, setWizardDone] = useState(false);
+
+  function refreshStats() {
+    invoke<VoCoStats>("get_stats").then(setStats).catch(() => {});
+  }
+
+  function refreshEngineStatus(c: VoCoConfig) {
+    setEngineStatus(`已就绪 · ${c.recognize_language === "ko" ? "韩语识别" : "中文识别"}`);
+  }
 
   useEffect(() => {
     invoke<VoCoConfig>("get_config")
       .then((c) => {
         setCfg(c);
         setWizardDone(c.first_run_completed);
-        setEngineStatus(
-          `引擎 · 火山 ${c.recognize_language === "ko" ? "韩语" : "中文"} · ${c.polish_model}`,
-        );
+        refreshEngineStatus(c);
       })
-      .catch((e) => setEngineStatus(`后端连接失败: ${e}`));
+      .catch(() => setEngineStatus("后端未连接"));
+
+    refreshStats();
 
     const unsubs: Array<() => void> = [];
     listen<VoCoResult>("voco:result", (e) => {
-      setHistory((h) => [e.payload, ...h].slice(0, 20));
+      setSessionHistory((h) => [e.payload, ...h].slice(0, 20));
+      refreshStats();
     }).then((u) => unsubs.push(u));
     listen<{ message: string }>("voco:error", (e) => {
       setLastError(e.payload.message);
@@ -72,8 +103,12 @@ function App() {
         initialCfg={cfg as any}
         onDone={() => {
           setWizardDone(true);
-          // Reload config so engineStatus reflects any wizard tweaks.
-          invoke<VoCoConfig>("get_config").then(setCfg).catch(() => {});
+          invoke<VoCoConfig>("get_config")
+            .then((c) => {
+              setCfg(c);
+              refreshEngineStatus(c);
+            })
+            .catch(() => {});
         }}
       />
     );
@@ -115,9 +150,17 @@ function App() {
 
       <main className="flex-1 overflow-auto">
         {page === "home" && (
-          <HomePage cfg={cfg} history={history} lastError={lastError} />
+          <HomePage
+            cfg={cfg}
+            sessionHistory={sessionHistory}
+            stats={stats}
+            lastError={lastError}
+            onDismissError={() => setLastError("")}
+          />
         )}
-        {page === "history" && <HistoryPage history={history} />}
+        {page === "history" && (
+          <HistoryPage onClearStats={refreshStats} />
+        )}
         {page === "dictionary" && <DictionaryPage />}
         {page === "settings" && <SettingsPage cfg={cfg} setCfg={setCfg} />}
       </main>
@@ -125,18 +168,29 @@ function App() {
   );
 }
 
+const TARGET_LANG_LABEL: Record<string, string> = {
+  ko: "韩语",
+  en: "英语",
+  zh: "中文",
+  ja: "日语",
+};
+
 function HomePage({
   cfg,
-  history,
+  sessionHistory,
+  stats,
   lastError,
+  onDismissError,
 }: {
   cfg: VoCoConfig | null;
-  history: VoCoResult[];
+  sessionHistory: VoCoResult[];
+  stats: VoCoStats;
   lastError: string;
+  onDismissError: () => void;
 }) {
-  const total = history.length;
-  const totalChars = history.reduce((sum, r) => sum + r.text.length, 0);
-  const translateCount = history.filter((r) => r.mode === "translate").length;
+  const sessionChars = sessionHistory.reduce((sum, r) => sum + r.text.length, 0);
+  const targetLabel =
+    TARGET_LANG_LABEL[cfg?.translate_target ?? "ko"] ?? cfg?.translate_target;
   return (
     <div className="p-10">
       <h1 className="text-[34px] font-semibold tracking-tight">
@@ -146,32 +200,38 @@ function HomePage({
         按住 <Kbd>{prettyKey(cfg?.trigger_polish)}</Kbd> 说话 — VoCo 自动把你说的话写到光标位置。
       </p>
       <p className="mt-1 text-black/55">
-        按住 <Kbd>{prettyKey(cfg?.trigger_polish)}</Kbd>+
-        <Kbd>{prettyKey(cfg?.trigger_translate_modifier)}</Kbd> 翻译成{cfg?.translate_target === "ko" ? "韩语" : cfg?.translate_target}。
+        同时按 <Kbd>{prettyKey(cfg?.trigger_translate_modifier)}</Kbd> 翻译成{targetLabel}。
       </p>
 
       {lastError && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
-          ⚠️ {lastError}
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3">
+          <span className="flex-1">⚠️ {friendlyError(lastError)}</span>
+          <button
+            onClick={onDismissError}
+            className="text-red-700/60 hover:text-red-700 text-lg leading-none"
+            aria-label="关闭"
+          >
+            ×
+          </button>
         </div>
       )}
 
       <div className="mt-10 grid grid-cols-4 gap-4">
-        <Metric label="本次会话字数" value={String(totalChars)} />
-        <Metric label="累计字数" value={String(totalChars)} />
-        <Metric label="累计次数" value={String(total)} />
-        <Metric label="翻译次数" value={String(translateCount)} />
+        <Metric label="本次字数" value={String(sessionChars)} />
+        <Metric label="今日字数" value={String(stats.today_chars)} />
+        <Metric label="累计字数" value={String(stats.total_chars)} />
+        <Metric label="翻译次数" value={String(stats.translate_count)} />
       </div>
 
       <div className="mt-10 rounded-2xl border border-black/[0.06] bg-white p-6">
         <div className="text-sm font-medium">最近识别</div>
         <div className="mt-3 space-y-3">
-          {history.length === 0 && (
+          {sessionHistory.length === 0 && (
             <div className="text-black/45 text-sm">
               还没有记录 — 按住快捷键说点什么试试。
             </div>
           )}
-          {history.slice(0, 5).map((r, i) => (
+          {sessionHistory.slice(0, 5).map((r, i) => (
             <ResultRow key={i} r={r} />
           ))}
         </div>
@@ -180,16 +240,57 @@ function HomePage({
   );
 }
 
-function HistoryPage({ history }: { history: VoCoResult[] }) {
+function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  function reload() {
+    setLoading(true);
+    invoke<{ sessions: Session[] }>("get_history")
+      .then((h) => setSessions((h.sessions ?? []).slice().reverse()))
+      .catch(() => setSessions([]))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    reload();
+    const unsubs: Array<() => void> = [];
+    listen("voco:result", () => reload()).then((u) => unsubs.push(u));
+    return () => {
+      unsubs.forEach((u) => u());
+    };
+  }, []);
+
+  function clearAll() {
+    if (!confirm("确定清空所有历史记录吗？这一步不能撤回。")) return;
+    invoke("clear_history")
+      .then(() => {
+        setSessions([]);
+        onClearStats();
+      })
+      .catch(() => {});
+  }
+
   return (
     <div className="p-10">
-      <h1 className="text-[28px] font-semibold tracking-tight">历史</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-[28px] font-semibold tracking-tight">历史</h1>
+        {sessions.length > 0 && (
+          <button
+            onClick={clearAll}
+            className="text-sm text-black/55 hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            清空记录
+          </button>
+        )}
+      </div>
       <div className="mt-6 space-y-3">
-        {history.length === 0 && (
+        {loading && <div className="text-black/45 text-sm">加载中…</div>}
+        {!loading && sessions.length === 0 && (
           <div className="text-black/55 text-sm">还没有记录。</div>
         )}
-        {history.map((r, i) => (
-          <ResultRow key={i} r={r} />
+        {sessions.map((s, i) => (
+          <SessionRow key={i} s={s} />
         ))}
       </div>
     </div>
@@ -386,6 +487,60 @@ function ResultRow({ r }: { r: VoCoResult }) {
       )}
     </div>
   );
+}
+
+function SessionRow({ s }: { s: Session }) {
+  const date = new Date(s.at);
+  const ago = relativeTime(date);
+  return (
+    <div className="rounded-xl border border-black/[0.06] p-3">
+      <div className="text-xs text-black/45 flex items-center gap-2 mb-1">
+        <span
+          className={
+            "inline-block w-2 h-2 rounded-full " +
+            (s.mode === "translate"
+              ? "bg-blue-500"
+              : s.mode === "polish"
+                ? "bg-emerald-500"
+                : "bg-gray-400")
+          }
+        />
+        {s.mode === "translate" ? "翻译" : s.mode === "polish" ? "润色" : "原文"}
+        <span className="ml-auto">{ago}</span>
+      </div>
+      <div className="text-sm text-black/85">{s.text}</div>
+      {s.raw !== s.text && (
+        <div className="text-xs text-black/35 mt-1">原文: {s.raw}</div>
+      )}
+    </div>
+  );
+}
+
+function relativeTime(d: Date): string {
+  const diff = Date.now() - d.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "刚刚";
+  if (m < 60) return `${m} 分钟前`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days} 天前`;
+  return d.toLocaleDateString("zh-CN");
+}
+
+function friendlyError(raw: string): string {
+  const s = raw.toLowerCase();
+  if (s.includes("api_key") || s.includes("api key") || s.includes("unauthorized") || s.includes("401"))
+    return "API 密钥未配置或失效，请检查设置。";
+  if (s.includes("timeout") || s.includes("timed out")) return "网络超时，请检查网络后重试。";
+  if (s.includes("network") || s.includes("dns") || s.includes("connection"))
+    return "网络连接失败，请检查网络。";
+  if (s.includes("microphone") || s.includes("input device") || s.includes("打开麦克风"))
+    return "麦克风无法访问，请检查系统麦克风权限或设备连接。";
+  if (s.includes("paste") || s.includes("clipboard")) return "粘贴失败，请确保光标在可输入位置。";
+  if (s.includes("empty") || s.includes("no speech") || s.includes("没听清"))
+    return "没听清楚，请再说一遍。";
+  return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
 }
 
 function prettyKey(code: string | undefined): string {

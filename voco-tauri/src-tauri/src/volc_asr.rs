@@ -138,24 +138,38 @@ fn parse_frame(data: &[u8]) -> Result<VolcResponse> {
     let compression = data[2] & 0x0F;
 
     if msg_type == MSG_ERROR {
+        if data.len() < 12 {
+            bail!("火山错误帧过短: {} bytes", data.len());
+        }
         let err_code = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
         let err_size =
             u32::from_be_bytes([data[8], data[9], data[10], data[11]]) as usize;
-        let err_msg = String::from_utf8_lossy(&data[12..12 + err_size]).into_owned();
+        let end = 12usize.checked_add(err_size).unwrap_or(usize::MAX).min(data.len());
+        let err_msg = String::from_utf8_lossy(&data[12..end]).into_owned();
         bail!("火山错误 code={}: {}", err_code, err_msg);
     }
 
     if msg_type == MSG_FULL_RESPONSE {
         let payload_size =
             u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize;
-        let payload = &data[8..8 + payload_size];
+        let payload_end = 8usize
+            .checked_add(payload_size)
+            .ok_or_else(|| anyhow::anyhow!("响应 payload 长度溢出"))?;
+        if payload_end > data.len() {
+            bail!(
+                "响应 payload 越界: 声明 {} bytes，实际剩余 {} bytes",
+                payload_size,
+                data.len().saturating_sub(8)
+            );
+        }
+        let payload = &data[8..payload_end];
         let payload_bytes: Vec<u8> = if compression == COMP_GZIP {
             gunzip(payload)?
         } else {
             payload.to_vec()
         };
         let resp: VolcResponse = serde_json::from_slice(&payload_bytes)
-            .with_context(|| format!("解析响应 JSON 失败"))?;
+            .with_context(|| "解析响应 JSON 失败".to_string())?;
         return Ok(resp);
     }
 

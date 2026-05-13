@@ -19,6 +19,9 @@ use std::time::Duration;
 
 const TARGET_SAMPLE_RATE: u32 = 16_000;
 const TARGET_CHANNELS: u16 = 1;
+/// Hard upper bound for a single utterance, in seconds. Protects against
+/// runaway memory if the hotkey gets stuck or the user holds it forever.
+const MAX_RECORD_SECS: usize = 60;
 
 /// Thin handle the engine holds. All fields are Send-safe.
 pub struct RecordingSession {
@@ -81,12 +84,13 @@ impl RecordingSession {
     /// resample to 16 kHz mono and return WAV bytes.
     pub fn stop_to_wav(self) -> Result<Vec<u8>> {
         let _ = self.stop_tx.send(());
-        let rx = self
+        // Recover from a poisoned mutex — the audio thread may have panicked,
+        // but we still want to surface that as a graceful error.
+        let mut guard = self
             .result_rx
             .lock()
-            .unwrap()
-            .take()
-            .ok_or_else(|| anyhow!("录音会话已经被消费"))?;
+            .unwrap_or_else(|e| e.into_inner());
+        let rx = guard.take().ok_or_else(|| anyhow!("录音会话已经被消费"))?;
         let result = rx
             .recv_timeout(Duration::from_secs(2))
             .context("等录音线程返回样本超时")?;
@@ -130,8 +134,11 @@ fn run_recorder(
     let device_sample_rate = stream_config.sample_rate.0;
     let device_channels = stream_config.channels;
 
+    // Pre-allocate for MAX_RECORD_SECS at the device's native rate/channels.
+    // The cpal callbacks check len() against this capacity and refuse to grow
+    // past it, so this also acts as a hard upper bound for memory use.
     let samples: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::with_capacity(
-        (device_sample_rate as usize) * 30 * device_channels as usize,
+        (device_sample_rate as usize) * MAX_RECORD_SECS * device_channels as usize,
     )));
 
     let build_result = match sample_format {
@@ -159,7 +166,9 @@ fn run_recorder(
     let _ = stop_rx.recv();
     drop(stream); // explicit stop
 
-    let collected = std::mem::take(&mut *samples.lock().unwrap());
+    let mut samples_guard = samples.lock().unwrap_or_else(|e| e.into_inner());
+    let collected = std::mem::take(&mut *samples_guard);
+    drop(samples_guard);
     let _ = result_tx.send(RecordingResult {
         samples: collected,
         sample_rate: device_sample_rate,
@@ -206,7 +215,17 @@ fn build_stream_f32(
                 sum_sq += (clamped as f64) * (clamped as f64);
             }
             let rms = (sum_sq / data.len().max(1) as f64).sqrt() as f32;
-            buf.lock().unwrap().extend_from_slice(&converted);
+            // Best-effort: skip this batch if the lock is poisoned.
+            // Never panic from inside the audio callback — WASAPI runs us on
+            // a realtime thread and a panic kills the whole process.
+            if let Ok(mut b) = buf.lock() {
+                let cap = max_samples_for(b.capacity());
+                let remaining = cap.saturating_sub(b.len());
+                let take = converted.len().min(remaining);
+                if take > 0 {
+                    b.extend_from_slice(&converted[..take]);
+                }
+            }
             update_level(&level, rms);
         },
         err_fn,
@@ -229,7 +248,14 @@ fn build_stream_i16(
                 let f = s as f32 / i16::MAX as f32;
                 sum_sq += (f as f64) * (f as f64);
             }
-            buf.lock().unwrap().extend_from_slice(data);
+            if let Ok(mut b) = buf.lock() {
+                let cap = max_samples_for(b.capacity());
+                let remaining = cap.saturating_sub(b.len());
+                let take = data.len().min(remaining);
+                if take > 0 {
+                    b.extend_from_slice(&data[..take]);
+                }
+            }
             let rms = (sum_sq / data.len().max(1) as f64).sqrt() as f32;
             update_level(&level, rms);
         },
@@ -256,13 +282,27 @@ fn build_stream_u16(
                 let f = signed as f32 / i16::MAX as f32;
                 sum_sq += (f as f64) * (f as f64);
             }
-            buf.lock().unwrap().extend_from_slice(&converted);
+            if let Ok(mut b) = buf.lock() {
+                let cap = max_samples_for(b.capacity());
+                let remaining = cap.saturating_sub(b.len());
+                let take = converted.len().min(remaining);
+                if take > 0 {
+                    b.extend_from_slice(&converted[..take]);
+                }
+            }
             let rms = (sum_sq / data.len().max(1) as f64).sqrt() as f32;
             update_level(&level, rms);
         },
         err_fn,
         None,
     )?)
+}
+
+/// Returns the absolute upper bound on sample count for a buffer whose
+/// initial capacity was sized for `MAX_RECORD_SECS` seconds. We treat the
+/// initial `Vec::with_capacity(...)` value as the cap — see run_recorder().
+fn max_samples_for(initial_capacity: usize) -> usize {
+    initial_capacity
 }
 
 fn update_level(level: &AtomicU32, rms: f32) {

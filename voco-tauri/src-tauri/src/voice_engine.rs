@@ -144,15 +144,19 @@ impl VoiceEngine {
         tokio::spawn(async move {
             let _guard = lock.lock().await;
             match process_pipeline(wav_bytes, &mode).await {
-                Ok(r) => {
+                Ok(outcome) => {
+                    let (payload, warn_msg) = match outcome {
+                        PipelineOutcome::Ok(p) => (p, None),
+                        PipelineOutcome::Warning { payload, message } => (payload, Some(message)),
+                    };
                     // Persist session to history before broadcasting result.
                     let cfg = AppConfig::load().unwrap_or_default();
                     let session = Session {
                         at: Utc::now(),
-                        mode: r.mode.clone(),
-                        raw: r.raw.clone(),
-                        text: r.text.clone(),
-                        translate_target: if r.mode == "translate" {
+                        mode: payload.mode.clone(),
+                        raw: payload.raw.clone(),
+                        text: payload.text.clone(),
+                        translate_target: if payload.mode == "translate" {
                             Some(cfg.translate_target.clone())
                         } else {
                             None
@@ -162,7 +166,10 @@ impl VoiceEngine {
                     let mut h = History::load();
                     h.push(session);
                     let _ = h.save();
-                    let _ = app_for_task.emit("voco:result", r);
+                    let _ = app_for_task.emit("voco:result", payload);
+                    if let Some(msg) = warn_msg {
+                        let _ = app_for_task.emit("voco:error", ErrorPayload { message: msg });
+                    }
                 }
                 Err(e) => {
                     tracing::warn!("pipeline failed: {e}");
@@ -182,9 +189,27 @@ impl VoiceEngine {
     }
 }
 
-async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<ResultPayload> {
+/// Outcome of the pipeline. `Warning` means we still got something usable for
+/// the user (raw text pasted) but a downstream step failed — so the UI should
+/// show a soft warning alongside the result instead of a hard error.
+pub enum PipelineOutcome {
+    Ok(ResultPayload),
+    Warning {
+        payload: ResultPayload,
+        message: String,
+    },
+}
+
+async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<PipelineOutcome> {
     let cfg = AppConfig::load()?;
     let keys = ApiKeys::from_env();
+
+    // Pre-flight: missing core ASR keys is a hard error — don't bother recording further.
+    if keys.volc_app_id.is_empty() || keys.volc_access_token.is_empty() {
+        return Err(anyhow!(
+            "未配置火山引擎语音识别密钥，请在设置中填写后再试。"
+        ));
+    }
 
     let volc = VolcConfig {
         appid: keys.volc_app_id,
@@ -195,16 +220,43 @@ async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<ResultPayloa
     };
     let raw_text = volc_recognize(&volc, &wav_bytes).await?;
 
+    // Empty recognition — most likely silence or background noise. Tell the
+    // user explicitly so they don't think the app silently swallowed input.
+    if raw_text.trim().is_empty() {
+        return Err(anyhow!("没听清楚，请再说一遍。"));
+    }
+
+    // For polish/translate modes, if the AI step fails we still want to paste
+    // the raw text so the user doesn't lose their utterance. We surface the
+    // failure as a Warning.
+    let mut warning: Option<String> = None;
     let final_text = match mode {
         "raw" => raw_text.clone(),
         "polish" => {
-            let client = AiClient::new(
+            match AiClient::new(
                 &cfg.polish_base_url,
                 &keys.deepseek,
                 &cfg.polish_model,
                 "DeepSeek 润色",
-            )?;
-            client.polish(&raw_text).await?
+            ) {
+                Ok(client) => match client.polish(&raw_text).await {
+                    Ok(t) if !t.trim().is_empty() => t,
+                    Ok(_) => {
+                        warning = Some("润色返回为空，已使用原文。".to_string());
+                        raw_text.clone()
+                    }
+                    Err(e) => {
+                        tracing::warn!("polish failed, falling back to raw: {e}");
+                        warning = Some(format!("润色失败，已使用原文：{e}"));
+                        raw_text.clone()
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("polish client init failed: {e}");
+                    warning = Some(format!("润色不可用，已使用原文：{e}"));
+                    raw_text.clone()
+                }
+            }
         }
         "translate" => {
             let api_key = if cfg.translate_engine == "openai" {
@@ -212,24 +264,52 @@ async fn process_pipeline(wav_bytes: Vec<u8>, mode: &str) -> Result<ResultPayloa
             } else {
                 &keys.relay
             };
-            let client = AiClient::new(
+            match AiClient::new(
                 &cfg.translate_base_url,
                 api_key,
                 &cfg.translate_model,
                 "OpenAI 翻译",
-            )?;
-            client.translate(&raw_text, &cfg.translate_target).await?
+            ) {
+                Ok(client) => match client.translate(&raw_text, &cfg.translate_target).await {
+                    Ok(t) if !t.trim().is_empty() => t,
+                    Ok(_) => {
+                        warning = Some("翻译返回为空，已使用原文。".to_string());
+                        raw_text.clone()
+                    }
+                    Err(e) => {
+                        tracing::warn!("translate failed, falling back to raw: {e}");
+                        warning = Some(format!("翻译失败，已使用原文：{e}"));
+                        raw_text.clone()
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("translate client init failed: {e}");
+                    warning = Some(format!("翻译不可用，已使用原文：{e}"));
+                    raw_text.clone()
+                }
+            }
         }
         other => return Err(anyhow!("未知 mode: {}", other)),
     };
 
+    // Paste step. If this fails the user got nothing usable — hard error.
     let to_paste = final_text.clone();
-    tokio::task::spawn_blocking(move || paste_text(&to_paste)).await??;
+    match tokio::task::spawn_blocking(move || paste_text(&to_paste)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            return Err(anyhow!("粘贴失败：{e}（请确保光标位于可输入位置）"));
+        }
+        Err(e) => return Err(anyhow!("粘贴任务异常：{e}")),
+    }
 
-    Ok(ResultPayload {
+    let payload = ResultPayload {
         raw: raw_text,
         text: final_text,
         mode: mode.to_string(),
+    };
+    Ok(match warning {
+        Some(msg) => PipelineOutcome::Warning { payload, message: msg },
+        None => PipelineOutcome::Ok(payload),
     })
 }
 

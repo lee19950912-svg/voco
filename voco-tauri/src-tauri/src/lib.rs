@@ -64,6 +64,16 @@ fn clear_history() -> Result<(), String> {
     History::default().save().map_err(|e| e.to_string())
 }
 
+/// Where the user can drop a `.env` file to provide API keys post-install.
+/// On Windows this resolves to %APPDATA%\VoCo. Returned so the wizard /
+/// settings page can show users the path.
+#[tauri::command]
+fn get_config_dir() -> Result<String, String> {
+    config::config_dir()
+        .map(|p| p.display().to_string())
+        .map_err(|e| e.to_string())
+}
+
 /// Manual trigger for the recording pipeline — used by the setup wizard's
 /// "record a test sample" flow. Records for 3 s, then runs the chosen mode.
 #[tauri::command]
@@ -135,13 +145,31 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Load .env from wherever it lives — try cwd first, then walk up to find
-    // it (handles `cargo run` from src-tauri/ vs `pnpm tauri dev` from root).
-    let _ = dotenvy::dotenv();
-    // Also try src-tauri-relative path, then voco-tauri root.
-    for relative in [".env", "../.env", "../../.env"] {
-        if std::path::Path::new(relative).exists() {
-            let _ = dotenvy::from_path(relative);
+    // Load API keys from .env, trying paths in order of preference:
+    //   1. The user-writable config dir (%APPDATA%\VoCo\.env on Windows).
+    //      This is what end-users get post-install — they don't have access
+    //      to Program Files, so we must look in roaming AppData.
+    //   2. Beside the running executable (portable install).
+    //   3. Dev-time fallbacks: cwd, ../.env, ../../.env (`pnpm tauri dev`
+    //      runs us from voco-tauri/, the project's .env is one level up).
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(p) = config::config_dir() {
+        candidates.push(p.join(".env"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidates.push(parent.join(".env"));
+        }
+    }
+    for rel in [".env", "../.env", "../../.env"] {
+        candidates.push(std::path::PathBuf::from(rel));
+    }
+    for path in &candidates {
+        if path.exists() {
+            if let Ok(_) = dotenvy::from_path(path) {
+                tracing::info!("loaded .env from: {}", path.display());
+                break;
+            }
         }
     }
     tracing::info!(
@@ -177,7 +205,8 @@ pub fn run() {
             manual_recognize,
             get_history,
             get_stats,
-            clear_history
+            clear_history,
+            get_config_dir
         ])
         .setup(move |app| {
             // System tray.
