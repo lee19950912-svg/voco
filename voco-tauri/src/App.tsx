@@ -62,6 +62,10 @@ function App() {
   });
   const [lastError, setLastError] = useState<string>("");
   const [wizardDone, setWizardDone] = useState(false);
+  // Autostart state lives at App level — loaded once at app start so the
+  // Settings page never sees a null→resolved transition (which manifested
+  // as the toggle flashing each time the user opened Settings).
+  const [autostart, setAutostart] = useState<boolean | null>(null);
 
   // Auto-dismiss errors after 8 seconds — they're transient by nature and
   // a stuck red banner makes the app feel broken.
@@ -90,6 +94,9 @@ function App() {
 
     refreshStats();
     getVersion().then(setVersion).catch(() => {});
+    isAutostartEnabled()
+      .then(setAutostart)
+      .catch(() => setAutostart(false));
 
     const unsubs: Array<() => void> = [];
     listen<VoCoResult>("voco:result", (e) => {
@@ -187,7 +194,13 @@ function App() {
         )}
         {page === "dictionary" && <DictionaryPage />}
         {page === "settings" && (
-          <SettingsPage cfg={cfg} setCfg={setCfg} version={version} />
+          <SettingsPage
+            cfg={cfg}
+            setCfg={setCfg}
+            version={version}
+            autostart={autostart}
+            setAutostart={setAutostart}
+          />
         )}
       </main>
     </div>
@@ -591,18 +604,18 @@ function SettingsPage({
   cfg,
   setCfg,
   version,
+  autostart,
+  setAutostart,
 }: {
   cfg: VoCoConfig | null;
   setCfg: (c: VoCoConfig) => void;
   version: string;
+  autostart: boolean | null;
+  setAutostart: (v: boolean | null) => void;
 }) {
   const [mics, setMics] = useState<string[]>([]);
-  const [autostart, setAutostart] = useState<boolean | null>(null);
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
-    isAutostartEnabled()
-      .then((v) => setAutostart(v))
-      .catch(() => setAutostart(false));
   }, []);
 
   async function toggleAutostart(next: boolean) {
@@ -621,6 +634,27 @@ function SettingsPage({
   function update<K extends keyof VoCoConfig>(key: K, value: VoCoConfig[K]) {
     if (!cfg) return;
     const next = { ...cfg, [key]: value };
+    setCfg(next);
+    invoke("save_config", { cfg: next }).catch(console.error);
+  }
+
+  // Switching translate engine needs to flip base_url + model + engine
+  // atomically — otherwise three save_config calls race and the polling
+  // thread reloads with mismatched fields. One write, all three fields.
+  function setTranslateEngine(engine: string) {
+    if (!cfg) return;
+    const presets: Record<string, { base_url: string; model: string }> = {
+      deepseek: { base_url: "https://api.deepseek.com", model: "deepseek-v4-flash" },
+      openai: { base_url: "https://api.openai.com/v1", model: "gpt-4.1-mini" },
+      relay: { base_url: "https://api.bltcy.ai/v1", model: "gpt-4.1-mini" },
+    };
+    const preset = presets[engine] ?? presets.deepseek;
+    const next: VoCoConfig = {
+      ...cfg,
+      translate_engine: engine,
+      translate_base_url: preset.base_url,
+      translate_model: preset.model,
+    };
     setCfg(next);
     invoke("save_config", { cfg: next }).catch(console.error);
   }
@@ -727,6 +761,17 @@ function SettingsPage({
             <option value="en">英语</option>
             <option value="zh">中文</option>
             <option value="ja">日语</option>
+          </select>
+        </Row>
+        <Row label="翻译引擎">
+          <select
+            value={cfg.translate_engine}
+            onChange={(e) => setTranslateEngine(e.target.value)}
+            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[300px]"
+          >
+            <option value="deepseek">DeepSeek V4-Flash（推荐，国内直连快）</option>
+            <option value="openai">OpenAI gpt-4.1-mini（韩语略优，延迟高）</option>
+            <option value="relay">中转站（OpenAI 备用线路）</option>
           </select>
         </Row>
       </Card>

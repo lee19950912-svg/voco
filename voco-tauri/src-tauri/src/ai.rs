@@ -1,8 +1,11 @@
 //! AI post-processing: polish + translate.
 //!
-//! Port of `polisher.py` — same dual-client architecture:
-//!   polish    -> DeepSeek V4 (国内直连、中文专项)
-//!   translate -> OpenAI gpt-4.1-mini (中转站国内可访问，韩语强)
+//! Both polish and translate default to DeepSeek (国内直连，低延迟，便宜):
+//!   polish    -> DeepSeek V4-Pro   (深度推理，更适合长句润色)
+//!   translate -> DeepSeek V4-Flash (轻量快，短句翻译够用，韩日多语种 OK)
+//!
+//! Translate engine is user-switchable from settings (DeepSeek / OpenAI /
+//! 中转站) for users who specifically need GPT-grade Korean quality.
 //!
 //! Both endpoints are OpenAI-compatible chat completions, so one client
 //! struct handles both — only base_url/model/api_key differ.

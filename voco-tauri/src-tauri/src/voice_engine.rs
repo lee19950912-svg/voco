@@ -356,16 +356,16 @@ async fn process_pipeline(
             }
         }
         "translate" => {
-            let api_key = if cfg.translate_engine == "openai" {
-                &keys.openai
-            } else {
-                &keys.relay
+            let (api_key, label) = match cfg.translate_engine.as_str() {
+                "deepseek" => (&keys.deepseek, "DeepSeek 翻译"),
+                "openai" => (&keys.openai, "OpenAI 翻译"),
+                _ => (&keys.relay, "中转站翻译"),
             };
             match AiClient::new(
                 &cfg.translate_base_url,
                 api_key,
                 &cfg.translate_model,
-                "OpenAI 翻译",
+                label,
             ) {
                 Ok(client) => match client.translate(&raw_text, &cfg.translate_target).await {
                     Ok(t) if !t.trim().is_empty() => t,
