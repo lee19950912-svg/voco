@@ -715,7 +715,7 @@ function SettingsPage({
           />
         </Row>
         <p className="text-[11px] text-black/45 pt-3">
-          改完快捷键或触发方式后，需要重启 VoCo 才会生效。
+          改完立即生效，无需重启。
         </p>
         <Row label="翻译目标语言">
           <select

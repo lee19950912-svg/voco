@@ -45,8 +45,16 @@ async fn get_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-async fn save_config(cfg: AppConfig) -> Result<(), String> {
-    cfg.save().map_err(|e| e.to_string())
+async fn save_config(
+    cfg: AppConfig,
+    #[cfg(windows)] hotkey: tauri::State<'_, HotkeyHandlesState>,
+) -> Result<(), String> {
+    cfg.save().map_err(|e| e.to_string())?;
+    // Tell the polling thread to pick up new hotkey / mode settings on its
+    // next tick — avoids forcing the user to restart VoCo.
+    #[cfg(windows)]
+    hotkey.reload.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -132,10 +140,15 @@ async fn manual_recognize(
         .map_err(|e| e.to_string())
 }
 
-/// Tauri-managed wrapper around the polling-hotkey stop flag, so we can flip
-/// it from the RunEvent::Exit handler.
+/// Tauri-managed handles to the polling-hotkey thread:
+///   - `stop`: flipped on RunEvent::Exit to wind the loop down cleanly.
+///   - `reload`: flipped by save_config so the loop re-reads settings
+///     without an app restart.
 #[cfg(windows)]
-struct HotkeyStop(Arc<AtomicBool>);
+struct HotkeyHandlesState {
+    stop: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+}
 
 // ----------------- Tray icon -----------------
 
@@ -313,11 +326,15 @@ pub fn run() {
             }
 
             // Bare-Alt hotkey via Windows polling (bypasses hook blockers).
-            // Stash the stop signal in app state so we can flip it on Exit.
+            // Stash both signal flags in app state — stop on Exit, reload
+            // when the settings page saves.
             #[cfg(windows)]
             {
-                let stop = polling_hotkey::spawn(app.handle().clone(), engine.clone());
-                app.manage(HotkeyStop(stop));
+                let handles = polling_hotkey::spawn(app.handle().clone(), engine.clone());
+                app.manage(HotkeyHandlesState {
+                    stop: handles.stop,
+                    reload: handles.reload,
+                });
             }
 
             // Show main window — also closes the splash phase.
@@ -361,8 +378,8 @@ pub fn run() {
             // events into a torn-down AppHandle.
             if matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
                 #[cfg(windows)]
-                if let Some(stop) = app_handle.try_state::<HotkeyStop>() {
-                    stop.0.store(true, Ordering::Relaxed);
+                if let Some(handles) = app_handle.try_state::<HotkeyHandlesState>() {
+                    handles.stop.store(true, Ordering::Relaxed);
                 }
             }
         });

@@ -38,14 +38,26 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use crate::config::AppConfig;
 use crate::voice_engine::{ErrorPayload, VoiceEngine};
 
-/// Spawns the polling loop on a dedicated OS thread. Returns a flag the
-/// caller can flip to `true` to ask the loop to exit cleanly — the loop
-/// observes the flag once per 20 ms cycle.
-pub fn spawn(app: AppHandle, engine: Arc<VoiceEngine>) -> Arc<AtomicBool> {
+/// Handle for talking to the polling thread from elsewhere in the app.
+/// `stop` ends the thread; `reload` asks it to re-read AppConfig on its
+/// next tick (used after the settings page saves new hotkeys / mode).
+pub struct HotkeyHandles {
+    pub stop: Arc<AtomicBool>,
+    pub reload: Arc<AtomicBool>,
+}
+
+/// Spawns the polling loop on a dedicated OS thread. Returns flags the
+/// caller can flip:
+///   - `stop = true`  → loop exits cleanly on its next tick.
+///   - `reload = true` → loop re-reads config + resets its state machine.
+/// The loop observes both flags once per 20 ms cycle.
+pub fn spawn(app: AppHandle, engine: Arc<VoiceEngine>) -> HotkeyHandles {
     let stop = Arc::new(AtomicBool::new(false));
+    let reload = Arc::new(AtomicBool::new(false));
     let stop_for_thread = stop.clone();
-    std::thread::spawn(move || run(app, engine, stop_for_thread));
-    stop
+    let reload_for_thread = reload.clone();
+    std::thread::spawn(move || run(app, engine, stop_for_thread, reload_for_thread));
+    HotkeyHandles { stop, reload }
 }
 
 fn key_is_down(vk: u16) -> bool {
@@ -112,17 +124,35 @@ fn spawn_stop(app: &AppHandle, engine: &Arc<VoiceEngine>, mode: &str) {
     });
 }
 
-fn run(app: AppHandle, engine: Arc<VoiceEngine>, stop: Arc<AtomicBool>) {
-    // Resolve hotkey codes + mode from config. Changes require an app restart.
+/// Resolve current hotkey settings from disk. Called at startup and on every
+/// reload signal — keeps everything centralized.
+fn load_hotkey_settings() -> (u16, u16, bool, String, String) {
     let cfg = AppConfig::load().unwrap_or_default();
     let trigger_vk = vk_from_code(&cfg.trigger_polish).unwrap_or(VK_RMENU.0);
     let translate_vk = vk_from_code(&cfg.trigger_translate_modifier).unwrap_or(VK_RSHIFT.0);
     let is_toggle = cfg.trigger_mode.eq_ignore_ascii_case("toggle");
+    (
+        trigger_vk,
+        translate_vk,
+        is_toggle,
+        cfg.trigger_polish,
+        cfg.trigger_translate_modifier,
+    )
+}
+
+fn run(
+    app: AppHandle,
+    engine: Arc<VoiceEngine>,
+    stop: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+) {
+    let (mut trigger_vk, mut translate_vk, mut is_toggle, mut trigger_label, mut modifier_label) =
+        load_hotkey_settings();
     tracing::info!(
         "hotkey: trigger={} (vk=0x{:X}), translate_modifier={} (vk=0x{:X}), mode={}",
-        cfg.trigger_polish,
+        trigger_label,
         trigger_vk,
-        cfg.trigger_translate_modifier,
+        modifier_label,
         translate_vk,
         if is_toggle { "toggle" } else { "hold" },
     );
@@ -140,6 +170,28 @@ fn run(app: AppHandle, engine: Arc<VoiceEngine>, stop: Arc<AtomicBool>) {
         if stop.load(Ordering::Relaxed) {
             tracing::info!("polling_hotkey: stop signal received, exiting");
             return;
+        }
+        // Settings page saved new hotkey/mode — pick up changes without
+        // restarting the app. Reset the state machine so a held key doesn't
+        // get mis-interpreted under the new bindings.
+        if reload.swap(false, Ordering::Relaxed) {
+            let (t_vk, m_vk, toggle, t_label, m_label) = load_hotkey_settings();
+            trigger_vk = t_vk;
+            translate_vk = m_vk;
+            is_toggle = toggle;
+            trigger_label = t_label;
+            modifier_label = m_label;
+            trigger_was_down = false;
+            translate_seen = false;
+            toggle_recording = false;
+            tracing::info!(
+                "hotkey: reloaded — trigger={} (vk=0x{:X}), translate_modifier={} (vk=0x{:X}), mode={}",
+                trigger_label,
+                trigger_vk,
+                modifier_label,
+                translate_vk,
+                if is_toggle { "toggle" } else { "hold" },
+            );
         }
         let trigger_is_down = key_is_down(trigger_vk);
         let press_edge = trigger_is_down && !trigger_was_down;
