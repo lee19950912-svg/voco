@@ -19,6 +19,8 @@ mod config;
 mod dictionary;
 #[cfg(windows)]
 mod history_crypt;
+#[cfg(windows)]
+mod kbd_layout;
 mod paste;
 #[cfg(windows)]
 mod polling_hotkey;
@@ -108,6 +110,21 @@ fn get_dictionary() -> Dictionary {
 #[tauri::command]
 fn save_dictionary(dict: Dictionary) -> Result<(), String> {
     dict.save().map_err(|e| e.to_string())
+}
+
+/// Returns true if a Korean keyboard layout is installed on this machine.
+/// Drives the settings-page "Korean IME detected" banner — Korean IME
+/// hardcodes Right-Alt as 한/영 toggle and will steal our hotkey.
+#[tauri::command]
+fn has_korean_ime() -> bool {
+    #[cfg(windows)]
+    {
+        kbd_layout::korean_installed()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 #[tauri::command]
@@ -311,7 +328,8 @@ pub fn run() {
             get_config_dir,
             check_api_keys,
             get_dictionary,
-            save_dictionary
+            save_dictionary,
+            has_korean_ime
         ])
         .setup(move |app| {
             // System tray. If this fails the user has no menu to quit from,

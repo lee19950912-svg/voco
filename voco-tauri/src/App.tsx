@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
@@ -23,6 +23,7 @@ import {
   Info,
   Keyboard,
   Plus,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { SetupWizard } from "./SetupWizard";
@@ -94,16 +95,30 @@ function App() {
       .then(setAutostart)
       .catch(() => setAutostart(false));
 
+    // StrictMode double-mounts effects in dev. `listen()` returns a Promise,
+    // so the unsubscribe function isn't available synchronously — if we just
+    // push it into an array and call them all on cleanup, the first cleanup
+    // happens before the Promise resolves and we leak a subscription. Then
+    // the second mount adds another, and every event fires twice (showed up
+    // as 本次次数 +2 per recording). Fix: a `cancelled` flag that makes any
+    // late-arriving unsub fire itself.
+    let cancelled = false;
     const unsubs: Array<() => void> = [];
+    const trackUnsub = (u: () => void) => {
+      if (cancelled) u();
+      else unsubs.push(u);
+    };
+
     listen<VoCoResult>("voco:result", (_e) => {
       setSessionCount((c) => c + 1);
       refreshStats();
-    }).then((u) => unsubs.push(u));
+    }).then(trackUnsub);
     listen<{ message: string }>("voco:error", (e) => {
       setLastError(e.payload.message);
-    }).then((u) => unsubs.push(u));
+    }).then(trackUnsub);
 
     return () => {
+      cancelled = true;
       unsubs.forEach((u) => u());
     };
   }, []);
@@ -149,12 +164,19 @@ function App() {
                 key={n.id}
                 onClick={() => setPage(n.id)}
                 className={
-                  "w-full text-left px-3 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors text-[14px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#4A90E2] " +
+                  "relative w-full text-left px-3 py-2.5 rounded-lg my-0.5 flex items-center gap-3 transition-colors text-[14px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563EB] " +
                   (active
-                    ? "bg-[#EAF2FD] text-[#4A90E2] font-medium"
+                    ? "bg-[#EFF6FF] text-[#2563EB] font-medium"
                     : "hover:bg-black/[0.04] text-black/70")
                 }
               >
+                <span
+                  aria-hidden
+                  className={
+                    "absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full bg-[#2563EB] transition-all duration-300 ease-out " +
+                    (active ? "h-5 opacity-100" : "h-0 opacity-0")
+                  }
+                />
                 <n.Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
                 <span>{n.label}</span>
               </button>
@@ -162,7 +184,10 @@ function App() {
           })}
         </nav>
         <div className="px-5 py-4 text-[12px] text-black/45 border-t border-black/[0.05] flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="relative inline-flex w-2 h-2">
+            <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />
+            <span className="relative inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          </span>
           <span>{engineStatus}</span>
         </div>
       </aside>
@@ -219,7 +244,7 @@ function HomePage({
     TARGET_LANG_LABEL[cfg?.translate_target ?? "ko"] ?? cfg?.translate_target;
   return (
     <div className="p-6 max-w-[1200px] mx-auto h-full flex flex-col min-h-0">
-      <section className="relative overflow-hidden rounded-[20px] border border-black/[0.05] bg-gradient-to-br from-[#F3F8FF] via-white to-[#EAF2FD] p-7 flex items-center gap-6 shrink-0">
+      <section className="relative overflow-hidden rounded-[20px] border border-black/[0.05] bg-gradient-to-br from-[#EFF6FF] via-white to-[#EFF6FF] p-7 flex items-center gap-6 shrink-0">
         <div className="flex-1 min-w-0">
           <h1 className="text-[30px] font-semibold tracking-tight leading-[1.15]">
             说出来，写下来
@@ -265,10 +290,11 @@ function HomeTipBanner() {
   // auto-mute, encryption, etc.) — passive onboarding.
   const tips = [
     "想要「按一下开始 / 再按一下结束」？设置 → 触发方式 → 切换模式",
-    "录音时电脑外放会自动静音，松手立刻恢复",
-    "翻译目标语言可在设置里换：韩 / 英 / 中 / 日 四选一",
-    "你的识别历史已用 Windows 加密存盘，只有你能解",
-    "改任何设置都立即生效，不需要重启 VoCo",
+    "想录音时电脑别响？设置 → 语音 → 录音时自动静音其他声音",
+    "想翻译成英语 / 中文 / 日语？设置 → 快捷键与触发 → 翻译目标语言",
+    "想换录音快捷键？设置 → 快捷键与触发 → 录音键",
+    "想让 VoCo 开机自启动？设置 → 启动 → 开机自动启动 VoCo",
+    "想看说过的话？侧栏 → 历史",
   ];
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -276,11 +302,32 @@ function HomeTipBanner() {
     return () => clearInterval(t);
   }, [tips.length]);
   return (
-    <div className="mt-4 shrink-0 px-5 py-3 rounded-xl border border-black/[0.04] bg-gradient-to-r from-[#F3F8FF] via-white to-[#EAF2FD] text-[12px] text-black/55 text-center flex items-center justify-center gap-2">
-      <span className="text-[#4A90E2]">💡</span>
+    <div className="mt-4 shrink-0 px-5 py-3 rounded-xl border border-black/[0.04] bg-gradient-to-r from-[#EFF6FF] via-white to-[#EFF6FF] text-[12px] text-black/55 text-center flex items-center justify-center gap-2">
+      <span className="text-[#2563EB]">💡</span>
       <span>{tips[i]}</span>
     </div>
   );
+}
+
+function useCountUp(target: number, duration = 800): number {
+  const [n, setN] = useState(target);
+  const fromRef = useRef(target);
+  useEffect(() => {
+    const from = fromRef.current;
+    if (from === target) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setN(Math.round(from + (target - from) * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return n;
 }
 
 function StatCard({
@@ -292,14 +339,15 @@ function StatCard({
   value: number;
   label: string;
 }) {
+  const animated = useCountUp(value);
   return (
-    <div className="rounded-[18px] border border-black/[0.05] bg-white p-6 flex items-center gap-5 transition-shadow hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)] min-h-0">
-      <div className="w-14 h-14 rounded-2xl bg-[#EAF2FD] flex items-center justify-center text-[#4A90E2] shrink-0">
+    <div className="voco-lift rounded-[18px] border border-black/[0.05] bg-white p-6 flex items-center gap-5 min-h-0">
+      <div className="w-14 h-14 rounded-2xl bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
         <Icon size={28} strokeWidth={1.8} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[40px] font-semibold leading-none voco-mono">
-          {value.toLocaleString("zh-CN")}
+        <div className="text-[40px] font-semibold leading-none voco-mono tabular-nums">
+          {animated.toLocaleString("zh-CN")}
         </div>
         <div className="mt-2 text-[13px] text-black/50">{label}</div>
       </div>
@@ -309,7 +357,7 @@ function StatCard({
 
 function Keycap({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="voco-mono inline-flex items-center px-2 py-0.5 rounded-md bg-[#EAF2FD] text-[#4A90E2] text-[12px] font-medium mx-0.5 border border-[#4A90E2]/15">
+    <kbd className="voco-mono inline-flex items-center px-2 py-0.5 rounded-md bg-[#EFF6FF] text-[#2563EB] text-[12px] font-medium mx-0.5 border border-[#2563EB]/15">
       {children}
     </kbd>
   );
@@ -324,16 +372,16 @@ function HeroIllustration() {
       className="relative shrink-0 w-[320px] h-[200px] pointer-events-none select-none"
       aria-hidden="true"
     >
-      <div className="absolute right-[40px] top-[20px] w-[160px] h-[160px] rounded-full bg-[#4A90E2]/[0.08] blur-2xl" />
+      <div className="absolute right-[40px] top-[20px] w-[160px] h-[160px] rounded-full bg-[#2563EB]/[0.08] blur-2xl" />
       <div className="absolute right-[20px] top-[60px] w-[120px] h-[120px] rounded-full bg-white/80 blur-xl" />
 
-      <div className="absolute right-[60px] top-[20px] w-[140px] h-[140px] rounded-full bg-gradient-to-br from-white to-[#DCE9F8] shadow-[0_18px_40px_-12px_rgba(74,144,226,0.35)] flex items-center justify-center border border-white">
-        <div className="w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[#6FA8E8] to-[#4A90E2] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)]">
+      <div className="voco-float-a absolute right-[60px] top-[20px] w-[140px] h-[140px] rounded-full bg-gradient-to-br from-white to-[#DBEAFE] shadow-[0_18px_40px_-12px_rgba(37,99,235,0.35)] flex items-center justify-center border border-white">
+        <div className="w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[#60A5FA] to-[#2563EB] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)]">
           <Mic size={36} strokeWidth={2} className="text-white" />
         </div>
       </div>
 
-      <div className="absolute left-[4px] top-[58px] w-[68px] h-[58px] rounded-2xl bg-gradient-to-br from-white to-[#E5EFFB] shadow-[0_10px_24px_-8px_rgba(74,144,226,0.30)] flex items-center justify-center border border-white">
+      <div className="voco-float-b absolute left-[4px] top-[58px] w-[68px] h-[58px] rounded-2xl bg-gradient-to-br from-white to-[#BFDBFE] shadow-[0_10px_24px_-8px_rgba(37,99,235,0.30)] flex items-center justify-center border border-white">
         <svg width="34" height="22" viewBox="0 0 34 22" fill="none">
           {[2, 7, 12, 17, 22, 27, 32].map((x, i) => {
             const heights = [6, 12, 18, 22, 16, 10, 6];
@@ -345,23 +393,23 @@ function HeroIllustration() {
                 width="3"
                 height={heights[i]}
                 rx="1.5"
-                fill="#4A90E2"
+                fill="#2563EB"
               />
             );
           })}
         </svg>
       </div>
 
-      <div className="absolute right-[2px] top-[78px] w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-white to-[#E5EFFB] shadow-[0_10px_24px_-8px_rgba(74,144,226,0.30)] flex items-center justify-center border border-white">
-        <span className="text-[#4A90E2] font-semibold text-[22px] voco-mono">
+      <div className="voco-float-c absolute right-[2px] top-[78px] w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-white to-[#BFDBFE] shadow-[0_10px_24px_-8px_rgba(37,99,235,0.30)] flex items-center justify-center border border-white">
+        <span className="text-[#2563EB] font-semibold text-[22px] voco-mono">
           A
         </span>
       </div>
 
-      <div className="absolute right-[30px] top-[10px] w-1.5 h-1.5 rounded-full bg-[#4A90E2]/30" />
-      <div className="absolute right-0 top-[50px] w-1 h-1 rounded-full bg-[#4A90E2]/40" />
-      <div className="absolute left-[78px] top-[20px] w-1 h-1 rounded-full bg-[#4A90E2]/40" />
-      <div className="absolute left-[58px] top-[170px] w-1.5 h-1.5 rounded-full bg-[#4A90E2]/25" />
+      <div className="voco-float-b absolute right-[30px] top-[10px] w-1.5 h-1.5 rounded-full bg-[#2563EB]/30" />
+      <div className="voco-float-c absolute right-0 top-[50px] w-1 h-1 rounded-full bg-[#2563EB]/40" />
+      <div className="voco-float-a absolute left-[78px] top-[20px] w-1 h-1 rounded-full bg-[#2563EB]/40" />
+      <div className="voco-float-b absolute left-[58px] top-[170px] w-1.5 h-1.5 rounded-full bg-[#2563EB]/25" />
     </div>
   );
 }
@@ -433,7 +481,7 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索历史…"
-            className="w-full border border-black/[0.08] bg-white rounded-lg pl-9 pr-3 py-2.5 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
+            className="w-full border border-black/[0.08] bg-white rounded-lg pl-9 pr-3 py-2.5 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
           />
         </div>
       )}
@@ -505,7 +553,7 @@ function DictionaryPage() {
               if (e.key === "Enter") addEntry();
             }}
             placeholder="词条，例如：李在镕"
-            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
           />
           <input
             value={newNote}
@@ -514,12 +562,12 @@ function DictionaryPage() {
               if (e.key === "Enter") addEntry();
             }}
             placeholder="说明（可空）"
-            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#4A90E2]/40 focus:ring-2 focus:ring-[#4A90E2]/10"
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
           />
           <button
             onClick={addEntry}
             disabled={!newTerm.trim()}
-            className="bg-[#4A90E2] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#357ABD] transition-colors disabled:opacity-40"
+            className="bg-[#0A0A0B] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#27272A] transition-colors disabled:opacity-40"
           >
             添加
           </button>
@@ -579,8 +627,13 @@ function SettingsPage({
   setAutostart: (v: boolean | null) => void;
 }) {
   const [mics, setMics] = useState<string[]>([]);
+  // Korean IME on Windows hardcodes Right-Alt as the 한/영 toggle key and
+  // will swallow our hotkey. If the user has Korean installed we surface a
+  // soft banner with a one-click switch to F9 (which no IME steals).
+  const [koreanIme, setKoreanIme] = useState(false);
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
+    invoke<boolean>("has_korean_ime").then(setKoreanIme).catch(() => {});
   }, []);
 
   async function toggleAutostart(next: boolean) {
@@ -691,6 +744,34 @@ function SettingsPage({
       </Card>
 
       <Card title="快捷键与触发" icon={<Keyboard size={16} strokeWidth={1.8} />}>
+        {koreanIme && cfg.trigger_polish === "alt_r" && (
+          <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
+            <AlertTriangle
+              size={18}
+              strokeWidth={2}
+              className="text-amber-600 shrink-0 mt-[2px]"
+            />
+            <div className="flex-1 text-[13px] leading-relaxed text-black/75">
+              <div className="font-medium text-black/85 mb-0.5">
+                检测到韩文输入法 — 右Alt 会被它截走
+              </div>
+              <div className="text-black/60">
+                韩文 IME 把右Alt 当成「韩/英」切换键，VoCo 收不到。建议改成不冲突的 F9。
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => update("trigger_polish", "f9")}
+                  className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] transition-colors"
+                >
+                  一键切到 F9
+                </button>
+                <span className="text-[12px] text-black/40">
+                  或下方手动选一个别的键
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
         <Row label="触发方式">
           <select
             value={cfg.trigger_mode}
@@ -792,7 +873,7 @@ function SessionRow({ s }: { s: Session }) {
           className={
             "inline-block w-2 h-2 rounded-full " +
             (s.mode === "translate"
-              ? "bg-[#4A90E2]"
+              ? "bg-amber-500"
               : s.mode === "polish"
                 ? "bg-emerald-500"
                 : "bg-gray-400")
@@ -901,7 +982,7 @@ function Toggle({
       className={
         "relative inline-flex items-center w-11 h-6 rounded-full " +
         (animate ? "transition-colors " : "") +
-        (checked ? "bg-[#4A90E2]" : "bg-black/15") +
+        (checked ? "bg-[#2563EB]" : "bg-black/15") +
         (disabled ? " opacity-50 cursor-not-allowed" : " cursor-pointer")
       }
       role="switch"
@@ -1048,13 +1129,22 @@ function KeyCapture({
     <button
       onClick={() => setCapturing(true)}
       className={
-        "inline-flex items-center justify-center min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
+        "inline-flex items-center justify-center gap-2 min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
         (capturing
-          ? "bg-[#EAF2FD] border border-[#4A90E2]/40 text-[#4A90E2] animate-pulse"
+          ? "bg-[#EFF6FF] border border-[#2563EB]/40 text-[#2563EB]"
           : "bg-white border border-black/[0.08] text-black/75 hover:bg-black/[0.04]")
       }
     >
-      {capturing ? "请按下任意键…（Esc 取消）" : prettyKey(value)}
+      {capturing ? (
+        <>
+          <span className="voco-bars" aria-hidden>
+            <span /><span /><span />
+          </span>
+          请按下任意键…（Esc 取消）
+        </>
+      ) : (
+        prettyKey(value)
+      )}
     </button>
   );
 }

@@ -5,8 +5,10 @@ import { listen } from "@tauri-apps/api/event";
 
 const BAR_COUNT = 5;
 const FRAME_MS = 33;
-const LISTEN_RETARGET_EVERY = 4;
-const LISTEN_EASE = 0.18;
+const LISTEN_EASE = 0.32;          // higher = snappier follow
+const SILENCE_LEVEL = 0.04;        // below this we hold the resting baseline
+const REST_HEIGHT = 3;             // px — flat line when silent
+const MAX_HEIGHT = 20;             // px — pill inner height cap
 const PROC_T_STEP = 0.45;
 const PROC_EASE = 0.30;
 
@@ -17,7 +19,7 @@ const bars: HTMLDivElement[] = [];
 for (let i = 0; i < BAR_COUNT; i++) {
   const b = document.createElement("div");
   b.className = "bar";
-  b.style.height = "4px";
+  b.style.height = REST_HEIGHT + "px";
   hud.appendChild(b);
   bars.push(b);
 }
@@ -26,9 +28,8 @@ let state: State = "hidden";
 let timer: number | null = null;
 let audioLevel = 0;
 let procT = 0;
-let listenFrame = 0;
-const listenTargets = new Array(BAR_COUNT).fill(4);
-const listenHeights = new Array(BAR_COUNT).fill(4);
+const listenTargets = new Array(BAR_COUNT).fill(REST_HEIGHT);
+const listenHeights = new Array(BAR_COUNT).fill(REST_HEIGHT);
 
 function stopTimer() {
   if (timer !== null) {
@@ -37,18 +38,26 @@ function stopTimer() {
   }
 }
 
-function listening() {
-  listenFrame++;
-  if (listenFrame >= LISTEN_RETARGET_EVERY) {
-    listenFrame = 0;
-    const volume = 0.45 + audioLevel * 0.55;
-    const mid = (BAR_COUNT - 1) / 2;
-    for (let i = 0; i < BAR_COUNT; i++) {
-      const distance = Math.abs(i - mid) / mid;
-      const base = (1 - distance * 0.5) * 16 * volume;
-      listenTargets[i] = Math.max(4, Math.min(20, base + Math.random() * 3));
-    }
+// Recompute targets directly from the most-recent audio level — no random
+// jitter, no minimum baseline. Center bar grows tallest, edges grow less.
+// Silence (level below SILENCE_LEVEL) collapses everything to REST_HEIGHT,
+// so the HUD looks dead-flat when the mic is not picking anything up.
+function retargetFromLevel() {
+  if (audioLevel < SILENCE_LEVEL) {
+    for (let i = 0; i < BAR_COUNT; i++) listenTargets[i] = REST_HEIGHT;
+    return;
   }
+  const mid = (BAR_COUNT - 1) / 2;
+  const v = Math.min(1, audioLevel);
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const distance = Math.abs(i - mid) / mid;
+    const shape = 1 - distance * 0.45;
+    const h = REST_HEIGHT + shape * (MAX_HEIGHT - REST_HEIGHT) * v;
+    listenTargets[i] = Math.max(REST_HEIGHT, Math.min(MAX_HEIGHT, h));
+  }
+}
+
+function listening() {
   for (let i = 0; i < BAR_COUNT; i++) {
     listenHeights[i] += (listenTargets[i] - listenHeights[i]) * LISTEN_EASE;
     bars[i].style.height = listenHeights[i].toFixed(1) + "px";
@@ -78,8 +87,16 @@ function applyState(next: State) {
     hud.classList.remove("show");
     return;
   }
-  listenFrame = 0;
   procT = 0;
+  // Reset to flat baseline when (re)entering listening; otherwise we'd ease
+  // down from the last "processing" tall shape.
+  if (next === "listening") {
+    audioLevel = 0;
+    for (let i = 0; i < BAR_COUNT; i++) {
+      listenTargets[i] = REST_HEIGHT;
+      listenHeights[i] = REST_HEIGHT;
+    }
+  }
   hud.classList.add("show");
   timer = window.setInterval(() => {
     if (state === "listening") listening();
@@ -92,8 +109,12 @@ listen<{ state: State }>("hud:state", (e) => applyState(e.payload.state)).catch(
   // standalone preview fallback
   applyState("listening");
 });
+// Each level update from the backend (~20 Hz) re-aims the bar targets to the
+// real volume immediately; the per-frame easing in listening() smooths the
+// motion to the actual height. No random padding.
 listen<{ level: number }>("hud:level", (e) => {
   audioLevel = e.payload.level;
+  if (state === "listening") retargetFromLevel();
 });
 
 // Always start hidden — Rust will tell us when to show.

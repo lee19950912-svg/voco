@@ -22,11 +22,13 @@ export function SetupWizard({
   const [audioLevel, setAudioLevel] = useState(0);
   const [keys, setKeys] = useState<ApiKeyStatus | null>(null);
   const [configDir, setConfigDir] = useState<string>("");
+  const [koreanIme, setKoreanIme] = useState(false);
 
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
     invoke<ApiKeyStatus>("check_api_keys").then(setKeys).catch(() => {});
     invoke<string>("get_config_dir").then(setConfigDir).catch(() => {});
+    invoke<boolean>("has_korean_ime").then(setKoreanIme).catch(() => {});
   }, []);
 
   // Wizard-only event subscriptions. App.tsx ignores these events while the
@@ -177,7 +179,7 @@ export function SetupWizard({
             <button
               onClick={runTest}
               disabled={recording}
-              className="mt-5 w-full bg-[#4A90E2] text-white py-2.5 rounded-lg font-medium hover:bg-[#357ABD] transition-colors disabled:bg-black/15"
+              className="mt-5 w-full bg-[#2563EB] text-white py-2.5 rounded-lg font-medium hover:bg-[#1D4ED8] transition-colors disabled:bg-black/15"
             >
               {recording ? "录音中…（3 秒）" : "录一句话试识别"}
             </button>
@@ -208,6 +210,42 @@ export function SetupWizard({
             <p className="mt-2 text-black/55 text-sm">
               点下方按钮然后按一下你想用的键。可以之后再改。
             </p>
+            {koreanIme && cfg.trigger_polish === "alt_r" && (
+              <div className="mt-5 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="text-amber-600 shrink-0 mt-[2px]"
+                >
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div className="flex-1 text-[13px] leading-relaxed text-black/75">
+                  <div className="font-medium text-black/85 mb-0.5">
+                    检测到韩文输入法 — 右Alt 会被它截走
+                  </div>
+                  <div className="text-black/60">
+                    韩文 IME 把右Alt 当成「韩/英」切换键，VoCo 收不到。建议改成不冲突的 F9。
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => update("trigger_polish", "f9")}
+                      className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] transition-colors"
+                    >
+                      一键切到 F9
+                    </button>
+                    <span className="text-[12px] text-black/40">
+                      或下方手动选
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="mt-5 space-y-3">
               <div className="flex items-center justify-between py-3 border-b border-black/[0.05]">
                 <div className="text-sm text-black/75">按住录音 + 润色</div>
@@ -267,7 +305,7 @@ export function SetupWizard({
           </button>
           <button
             onClick={next}
-            className="bg-[#4A90E2] text-white py-2.5 px-8 rounded-lg font-medium hover:bg-[#357ABD] transition-colors"
+            className="bg-[#2563EB] text-white py-2.5 px-8 rounded-lg font-medium hover:bg-[#1D4ED8] transition-colors"
           >
             {step === TOTAL_STEPS ? "开始使用" : "下一步"}
           </button>
@@ -287,14 +325,14 @@ function Steps({ step, total }: { step: number; total: number }) {
             <div
               className={
                 "w-7 h-7 rounded-full grid place-items-center text-xs font-medium " +
-                (i <= step ? "bg-[#4A90E2] text-white" : "bg-black/8 text-black/45")
+                (i <= step ? "bg-[#2563EB] text-white" : "bg-black/8 text-black/45")
               }
             >
               {i}
             </div>
             {i < total && (
               <div
-                className={"w-8 h-px " + (i < step ? "bg-[#4A90E2]" : "bg-black/10")}
+                className={"w-8 h-px " + (i < step ? "bg-[#2563EB]" : "bg-black/10")}
               />
             )}
           </div>
@@ -406,7 +444,7 @@ function KeyCapture({
       className={
         "inline-flex items-center justify-center min-w-[160px] px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
         (capturing
-          ? "bg-[#EAF2FD] border border-[#4A90E2]/40 text-[#4A90E2] animate-pulse"
+          ? "bg-[#EFF6FF] border border-[#2563EB]/40 text-[#2563EB] animate-pulse"
           : "bg-white border border-black/[0.08] text-black/75 hover:bg-black/[0.04]")
       }
     >
