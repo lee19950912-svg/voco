@@ -213,6 +213,7 @@ function App() {
             version={version}
             autostart={autostart}
             setAutostart={setAutostart}
+            onRerunWizard={() => setWizardDone(false)}
           />
         )}
       </main>
@@ -511,6 +512,13 @@ const DICT_SUGGESTIONS = [
   "OpenAI",
 ];
 
+// Hard cap on dictionary size. Each term is concatenated into both the
+// polish and translate system prompts, so a runaway dictionary linearly
+// inflates every LLM call's input cost AND dilutes the model's attention.
+// 20 covers ~95% of real users (most need ≤10) — heavier glossaries are a
+// "pro tier" pricing lever, not free.
+const DICT_MAX = 20;
+
 function DictionaryPage() {
   const [entries, setEntries] = useState<DictEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -541,6 +549,7 @@ function DictionaryPage() {
   function addEntry(term?: string, note?: string) {
     const t = (term ?? newTerm).trim();
     if (!t) return;
+    if (entries.length >= DICT_MAX) return;
     if (entries.some((e) => e.term === t)) {
       setNewTerm("");
       setNewNote("");
@@ -566,6 +575,9 @@ function DictionaryPage() {
   const unseenSuggestions = DICT_SUGGESTIONS.filter(
     (s) => !entries.some((e) => e.term === s),
   );
+  const remaining = DICT_MAX - entries.length;
+  const atLimit = remaining <= 0;
+  const nearLimit = remaining > 0 && remaining <= 3;
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto">
@@ -622,7 +634,26 @@ function DictionaryPage() {
         </div>
       </div>
 
-      <Card title="添加词条" icon={<Plus size={16} strokeWidth={1.8} />}>
+      <Card
+        title={
+          <span className="flex items-center gap-2">
+            添加词条
+            <span
+              className={
+                "text-[11px] font-medium px-2 py-0.5 rounded-full voco-mono " +
+                (atLimit
+                  ? "bg-red-50 text-red-600 border border-red-200"
+                  : nearLimit
+                    ? "bg-amber-50 text-amber-700 border border-amber-300/50"
+                    : "bg-black/[0.04] text-black/55 border border-black/[0.06]")
+              }
+            >
+              {entries.length} / {DICT_MAX}
+            </span>
+          </span>
+        }
+        icon={<Plus size={16} strokeWidth={1.8} />}
+      >
         <div className="flex gap-3">
           <input
             value={newTerm}
@@ -630,8 +661,13 @@ function DictionaryPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") addEntry();
             }}
-            placeholder="常被识别错的词，例如：飞书"
-            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
+            disabled={atLimit}
+            placeholder={
+              atLimit
+                ? "词典已满，删一条再加"
+                : "常被识别错的词，例如：飞书"
+            }
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10 disabled:bg-black/[0.03] disabled:text-black/40"
           />
           <input
             value={newNote}
@@ -639,17 +675,28 @@ function DictionaryPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") addEntry();
             }}
+            disabled={atLimit}
             placeholder="备注（自己看的，可空）"
-            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
+            className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10 disabled:bg-black/[0.03] disabled:text-black/40"
           />
           <button
             onClick={() => addEntry()}
-            disabled={!newTerm.trim()}
+            disabled={!newTerm.trim() || atLimit}
             className="bg-[#0A0A0B] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#27272A] transition-colors disabled:opacity-40"
           >
             添加
           </button>
         </div>
+        {atLimit && (
+          <div className="mt-3 text-[12px] text-red-600">
+            已达上限 {DICT_MAX} 条 — 删一条不常用的再加新的。词典放太多会让 AI 注意力分散，纠错反而变差。
+          </div>
+        )}
+        {nearLimit && !atLimit && (
+          <div className="mt-3 text-[12px] text-amber-700">
+            还能加 {remaining} 条 — 词典最多 {DICT_MAX} 条，留点空间给后面真用得上的词。
+          </div>
+        )}
       </Card>
 
       {loaded && entries.length === 0 && unseenSuggestions.length > 0 && (
@@ -670,7 +717,7 @@ function DictionaryPage() {
       )}
 
       <Card
-        title={`已收录 ${entries.length} 个`}
+        title={`已收录 ${entries.length} / ${DICT_MAX}`}
         icon={<BookOpen size={16} strokeWidth={1.8} />}
       >
         {entries.length > 0 && (
@@ -741,12 +788,14 @@ function SettingsPage({
   version,
   autostart,
   setAutostart,
+  onRerunWizard,
 }: {
   cfg: VoCoConfig | null;
   setCfg: (c: VoCoConfig) => void;
   version: string;
   autostart: boolean | null;
   setAutostart: (v: boolean | null) => void;
+  onRerunWizard: () => void;
 }) {
   const [mics, setMics] = useState<string[]>([]);
   // Korean IME on Windows hardcodes Right-Alt as the 한/영 toggle key and
@@ -863,9 +912,54 @@ function SettingsPage({
         <Row label="检查更新">
           <UpdateChecker />
         </Row>
+        <Row label="重新跑首次设置向导">
+          <button
+            onClick={onRerunWizard}
+            className="px-3 py-1.5 rounded-md text-[12px] text-black/70 border border-black/[0.08] bg-white hover:bg-black/[0.04] transition-colors"
+          >
+            重新打开
+          </button>
+        </Row>
       </Card>
 
       <Card title="快捷键与触发" icon={<Keyboard size={16} strokeWidth={1.8} />}>
+        {(() => {
+          // Windows defaults: Alt+Shift / Ctrl+Shift switch IME. If the
+          // user's trigger is Alt/Ctrl AND the translate modifier is Shift,
+          // they'll trip the IME-switch hotkey every time they translate.
+          const isAltOrCtrl = /^(alt|ctrl)_/.test(cfg.trigger_polish);
+          const isShiftMod = /^shift_/.test(cfg.trigger_translate_modifier);
+          const conflict = isAltOrCtrl && isShiftMod;
+          if (!conflict) return null;
+          return (
+            <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
+              <AlertTriangle
+                size={18}
+                strokeWidth={2}
+                className="text-amber-600 shrink-0 mt-[2px]"
+              />
+              <div className="flex-1 text-[13px] leading-relaxed text-black/75">
+                <div className="font-medium text-black/85 mb-0.5">
+                  {prettyKey(cfg.trigger_polish)} + {prettyKey(cfg.trigger_translate_modifier)} 跟 Windows「切换输入法」热键撞了
+                </div>
+                <div className="text-black/60">
+                  按翻译时会顺便切一下输入法。把翻译附加键换成右Ctrl 就不撞了。
+                </div>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => update("trigger_translate_modifier", "ctrl_r")}
+                    className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] active:scale-[0.96] transition-all duration-150"
+                  >
+                    一键切到 右Ctrl
+                  </button>
+                  <span className="text-[12px] text-black/40">
+                    或下方手动选别的
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         {koreanIme && cfg.trigger_polish === "alt_r" && (
           <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
             <AlertTriangle
@@ -883,7 +977,7 @@ function SettingsPage({
               <div className="mt-2 flex items-center gap-2">
                 <button
                   onClick={() => update("trigger_polish", "f9")}
-                  className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] transition-colors"
+                  className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] active:scale-[0.96] transition-all duration-150"
                 >
                   一键切到 F9
                 </button>
@@ -950,12 +1044,72 @@ function SettingsPage({
 
 // ---------- Reusable bits ----------
 
+/**
+ * Action button with built-in press-down animation + "just clicked"
+ * confirmation. For actions whose actual effect happens outside the app
+ * (opening system settings, copying to clipboard, etc.) — the user otherwise
+ * has no visual signal that the click registered. Shows `confirmLabel` for
+ * 1.6s after click, then returns to normal.
+ */
+function ActionButton({
+  onClick,
+  children,
+  confirmLabel,
+  className = "",
+  disabled = false,
+}: {
+  onClick: () => void | Promise<void>;
+  children: React.ReactNode;
+  confirmLabel?: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const [justFired, setJustFired] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+  function handle() {
+    if (disabled) return;
+    void onClick();
+    if (confirmLabel) {
+      setJustFired(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setJustFired(false), 1600);
+    }
+  }
+  return (
+    <button
+      onClick={handle}
+      disabled={disabled}
+      className={
+        "inline-flex items-center gap-1.5 transition-all duration-150 " +
+        "active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed " +
+        "disabled:active:scale-100 " +
+        className
+      }
+    >
+      {justFired && confirmLabel ? (
+        <>
+          <Check size={12} strokeWidth={2.6} />
+          {confirmLabel}
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+
 function Card({
   title,
   icon,
   children,
 }: {
-  title: string;
+  title: React.ReactNode;
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {

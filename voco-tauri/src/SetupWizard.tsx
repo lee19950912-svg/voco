@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openPath } from "@tauri-apps/plugin-opener";
-import type { VoCoConfig, ApiKeyStatus } from "./types";
+import { FileText, Sparkles, Globe, Mic, AlertTriangle } from "lucide-react";
+import type { VoCoConfig } from "./types";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
+const STEP_LABELS = ["欢迎", "麦克风", "快捷键", "完成"];
 
 export function SetupWizard({
   onDone,
@@ -20,14 +21,10 @@ export function SetupWizard({
   const [testError, setTestError] = useState<string>("");
   const [recording, setRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [keys, setKeys] = useState<ApiKeyStatus | null>(null);
-  const [configDir, setConfigDir] = useState<string>("");
   const [koreanIme, setKoreanIme] = useState(false);
 
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
-    invoke<ApiKeyStatus>("check_api_keys").then(setKeys).catch(() => {});
-    invoke<string>("get_config_dir").then(setConfigDir).catch(() => {});
     invoke<boolean>("has_korean_ime").then(setKoreanIme).catch(() => {});
   }, []);
 
@@ -67,6 +64,26 @@ export function SetupWizard({
     if (step > 1) setStep(step - 1);
   }
 
+  // Enter advances; Esc goes back. Skip while focused on a text input or
+  // capturing a key (KeyCapture sets its own keydown listener), so we don't
+  // double-trigger.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "textarea") return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void next();
+      } else if (e.key === "Escape" && step > 1) {
+        e.preventDefault();
+        prev();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, cfg]);
+
   async function update<K extends keyof VoCoConfig>(k: K, v: VoCoConfig[K]) {
     const nextCfg = { ...cfg, [k]: v };
     setCfg(nextCfg);
@@ -81,24 +98,13 @@ export function SetupWizard({
     );
   }
 
-  async function refreshKeys() {
-    const k = await invoke<ApiKeyStatus>("check_api_keys").catch(() => null);
-    if (k) setKeys(k);
-  }
-
-  function openConfigFolder() {
-    if (configDir) openPath(configDir).catch(() => {});
-  }
-
-  const allCoreKeysSet = !!keys && keys.volc && keys.deepseek;
-
   return (
     <div className="h-screen flex items-center justify-center bg-white">
-      <div className="w-[600px] p-12 rounded-2xl border border-black/[0.05] shadow-sm">
-        <Steps step={step} total={TOTAL_STEPS} />
+      <div className="w-[680px] p-12 rounded-2xl border border-black/[0.05] shadow-sm">
+        <Steps step={step} total={TOTAL_STEPS} labels={STEP_LABELS} />
 
         {step === 1 && (
-          <div className="mt-10">
+          <div className="mt-10 voco-step-fade">
             <img
               src="/voco-logo.png"
               alt="VoCo"
@@ -109,72 +115,56 @@ export function SetupWizard({
               欢迎使用 VoCo
             </h1>
             <p className="mt-3 text-center text-black/55 text-sm leading-relaxed">
-              语音输入法 — 按住快捷键说话，AI 把你说的话自动写到光标位置。
+              按住快捷键说话，AI 自动把你说的话写到光标位置。
               <br />
-              几步完成设置，大概 1 分钟。
+              下面 3 步搞定设置，大约 1 分钟。
             </p>
+
+            <div className="mt-8 grid grid-cols-3 gap-3">
+              <ModeCard
+                Icon={FileText}
+                title="直接转文字"
+                desc="松开快捷键，原话出字"
+              />
+              <ModeCard
+                Icon={Sparkles}
+                title="AI 润色"
+                desc="去口水话、修语法、整理列表"
+              />
+              <ModeCard
+                Icon={Globe}
+                title="翻译"
+                desc="说中文，写韩 / 英 / 日"
+              />
+            </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="mt-10">
-            <h2 className="text-xl font-semibold">API 密钥</h2>
-            <p className="mt-2 text-black/55 text-sm">
-              VoCo 需要语音识别和 AI 润色的密钥才能工作。把 <code className="bg-black/5 px-1 py-0.5 rounded text-[11px]">.env</code> 文件放进下面这个文件夹：
-            </p>
-
-            <div className="mt-5 rounded-xl bg-black/[0.04] p-4 text-[12px] font-mono break-all text-black/75">
-              {configDir || "正在解析…"}
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={openConfigFolder}
-                disabled={!configDir}
-                className="text-sm px-3 py-1.5 rounded-lg border border-black/[0.08] hover:bg-black/5 disabled:opacity-40"
-              >
-                打开文件夹
-              </button>
-              <button
-                onClick={refreshKeys}
-                className="text-sm px-3 py-1.5 rounded-lg border border-black/[0.08] hover:bg-black/5"
-              >
-                重新检查
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-2">
-              <KeyStatus label="火山引擎语音识别" ok={!!keys?.volc} />
-              <KeyStatus label="DeepSeek 润色" ok={!!keys?.deepseek} />
-              <KeyStatus label="翻译服务" ok={!!(keys?.relay || keys?.openai)} optional />
-            </div>
-
-            {!allCoreKeysSet && keys && (
-              <div className="mt-5 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                ⚠️ 关键密钥尚未配置，下一步的麦克风测试可能失败。
-              </div>
-            )}
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="mt-10">
+          <div className="mt-10 voco-step-fade">
             <h2 className="text-xl font-semibold">选麦克风</h2>
             <p className="mt-2 text-black/55 text-sm">
-              对着麦克风说一句话，看下面音量条是否有反应。
+              先挑你常用的那个麦，下面录一句话试试能不能听清。
             </p>
-            <select
-              value={cfg.input_device}
-              onChange={(e) => update("input_device", e.target.value)}
-              className="mt-5 w-full border border-black/[0.08] rounded-lg px-3 py-2"
-            >
-              <option value="">系统默认</option>
-              {mics.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+            <div className="mt-5 relative">
+              <Mic
+                size={16}
+                strokeWidth={2}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-black/45 pointer-events-none"
+              />
+              <select
+                value={cfg.input_device}
+                onChange={(e) => update("input_device", e.target.value)}
+                className="w-full border border-black/[0.08] rounded-lg pl-9 pr-3 py-2.5 text-sm bg-white"
+              >
+                <option value="">系统默认</option>
+                {mics.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <button
               onClick={runTest}
@@ -184,11 +174,30 @@ export function SetupWizard({
               {recording ? "录音中…（3 秒）" : "录一句话试识别"}
             </button>
 
-            <div className="mt-3 h-2 bg-black/5 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 transition-all"
-                style={{ width: `${Math.min(100, audioLevel * 100)}%` }}
-              />
+            {/* 5-bar level visualizer (HUD-style, but blue). Heights scale
+                with audioLevel directly — silence collapses to 4px. */}
+            <div className="mt-5 flex items-end justify-center gap-1.5 h-12">
+              {[0, 1, 2, 3, 4].map((i) => {
+                const mid = 2;
+                const dist = Math.abs(i - mid) / mid;
+                const shape = 1 - dist * 0.45;
+                const v = Math.min(1, audioLevel);
+                const h = v < 0.04 ? 4 : 4 + shape * 36 * v;
+                return (
+                  <div
+                    key={i}
+                    className="w-2.5 bg-[#2563EB] rounded-full"
+                    style={{ height: h + "px" }}
+                  />
+                );
+              })}
+            </div>
+            <div className="mt-1 text-center text-[11px] text-black/40">
+              {recording
+                ? "听到了，对着麦再说一句…"
+                : audioLevel > 0.04
+                  ? "麦克风工作中"
+                  : "点上面按钮试一下，看条形会不会跳动"}
             </div>
 
             {testResult && (
@@ -204,27 +213,32 @@ export function SetupWizard({
           </div>
         )}
 
-        {step === 4 && (
-          <div className="mt-10">
+        {step === 3 && (
+          <div className="mt-10 voco-step-fade">
             <h2 className="text-xl font-semibold">快捷键</h2>
             <p className="mt-2 text-black/55 text-sm">
-              点下方按钮然后按一下你想用的键。可以之后再改。
+              点按钮 → 按一下你想用的键。之后能改。
             </p>
+
+            {/* Visual demo of how the shortcut feels */}
+            <div className="mt-5 rounded-xl bg-[#EFF6FF]/60 border border-[#2563EB]/15 px-4 py-3 flex items-center justify-center gap-3 text-[12px] text-black/65">
+              按住 <Kbd>{prettyKey(cfg.trigger_polish)}</Kbd>
+              <span className="text-[#2563EB]">→</span>
+              说话
+              <span className="text-[#2563EB]">→</span>
+              松开
+              <span className="text-[#2563EB]">→</span>
+              <span className="text-black/85 font-medium">字自动出现</span>
+            </div>
+
+            {/* Korean IME conflict — right Alt is stolen by 한/영 toggle */}
             {koreanIme && cfg.trigger_polish === "alt_r" && (
-              <div className="mt-5 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+              <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
+                <AlertTriangle
+                  size={18}
+                  strokeWidth={2}
                   className="text-amber-600 shrink-0 mt-[2px]"
-                >
-                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
+                />
                 <div className="flex-1 text-[13px] leading-relaxed text-black/75">
                   <div className="font-medium text-black/85 mb-0.5">
                     检测到韩文输入法 — 右Alt 会被它截走
@@ -239,34 +253,67 @@ export function SetupWizard({
                     >
                       一键切到 F9
                     </button>
-                    <span className="text-[12px] text-black/40">
-                      或下方手动选
-                    </span>
+                    <span className="text-[12px] text-black/40">或下方手动选</span>
                   </div>
                 </div>
               </div>
             )}
-            <div className="mt-5 space-y-3">
-              <div className="flex items-center justify-between py-3 border-b border-black/[0.05]">
-                <div className="text-sm text-black/75">按住录音 + 润色</div>
+
+            {/* Windows IME-switch conflict — Alt/Ctrl + Shift defaults */}
+            {(() => {
+              const isAltOrCtrl = /^(alt|ctrl)_/.test(cfg.trigger_polish);
+              const isShiftMod = /^shift_/.test(cfg.trigger_translate_modifier);
+              if (!(isAltOrCtrl && isShiftMod)) return null;
+              return (
+                <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-400/40 bg-amber-50/80">
+                  <AlertTriangle
+                    size={18}
+                    strokeWidth={2}
+                    className="text-amber-600 shrink-0 mt-[2px]"
+                  />
+                  <div className="flex-1 text-[13px] leading-relaxed text-black/75">
+                    <div className="font-medium text-black/85 mb-0.5">
+                      {prettyKey(cfg.trigger_polish)} + {prettyKey(cfg.trigger_translate_modifier)} 跟 Windows「切换输入法」热键撞了
+                    </div>
+                    <div className="text-black/60">
+                      按翻译时会顺便切一下输入法。把翻译附加键换成右Ctrl 就不撞了。
+                    </div>
+                    <div className="mt-2">
+                      <button
+                        onClick={() => update("trigger_translate_modifier", "ctrl_r")}
+                        className="bg-[#0A0A0B] text-white px-3 py-1.5 rounded-md text-[12px] font-medium hover:bg-[#27272A] active:scale-[0.96] transition-all duration-150"
+                      >
+                        一键切到 右Ctrl
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="mt-5 space-y-2">
+              <div className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-black/[0.06] bg-white">
+                <div className="text-sm text-black/75">按住录音 + AI 润色</div>
                 <KeyCapture
                   value={cfg.trigger_polish}
                   onChange={(v) => update("trigger_polish", v)}
                 />
               </div>
-              <div className="flex items-center justify-between py-3 border-b border-black/[0.05]">
-                <div className="text-sm text-black/75">加按这个键时翻译</div>
+              <div className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-black/[0.06] bg-white">
+                <div className="text-sm text-black/75">
+                  加按这个键 = 翻译模式
+                </div>
                 <KeyCapture
                   value={cfg.trigger_translate_modifier}
                   onChange={(v) => update("trigger_translate_modifier", v)}
                 />
               </div>
-              <div className="flex items-center justify-between py-3">
+              <div className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-black/[0.06] bg-white">
                 <div className="text-sm text-black/75">翻译目标语言</div>
                 <select
                   value={cfg.translate_target}
                   onChange={(e) => update("translate_target", e.target.value)}
-                  className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[160px]"
+                  className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[160px] text-sm bg-white"
                 >
                   <option value="ko">韩语</option>
                   <option value="en">英语</option>
@@ -275,22 +322,29 @@ export function SetupWizard({
                 </select>
               </div>
             </div>
-            <p className="mt-5 text-xs text-black/40">
-              提示：右 Alt 在 Windows 默认是切换输入法的键，建议到「设置 → 时间和语言 → 输入语言热键」把那项改成「未分配」，否则每次说话会顺便切一下输入法。
-            </p>
           </div>
         )}
 
-        {step === 5 && (
-          <div className="mt-10 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500 grid place-items-center text-white text-3xl">
+        {step === 4 && (
+          <div className="mt-10 voco-step-fade text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500 grid place-items-center text-white text-3xl shadow-[0_8px_24px_-8px_rgba(16,185,129,0.5)]">
               ✓
             </div>
-            <h2 className="mt-6 text-2xl font-semibold">设置完成</h2>
+            <h2 className="mt-6 text-2xl font-semibold">都设置好了</h2>
             <p className="mt-3 text-black/55 text-sm leading-relaxed">
-              现在按住 <Kbd>{prettyKey(cfg.trigger_polish)}</Kbd> 说话试试 — VoCo 会把你说的话写到光标位置。
-              <br />
-              主窗口可以最小化到任务栏托盘，需要时再打开。
+              VoCo 会一直在后台候命。需要说话时按下面这个键就行：
+            </p>
+
+            <div className="mt-6 inline-flex flex-col items-center gap-3 px-8 py-5 rounded-2xl bg-[#EFF6FF] border border-[#2563EB]/15">
+              <div className="text-[12px] text-black/55">按住</div>
+              <Kbd>{prettyKey(cfg.trigger_polish)}</Kbd>
+              <div className="text-[12px] text-black/55">
+                说话 · 松开 · 字自动写到光标
+              </div>
+            </div>
+
+            <p className="mt-6 text-[12px] text-black/40 leading-relaxed">
+              关掉主窗口不会退出 — VoCo 会留在任务栏托盘里。需要时左键托盘图标打开。
             </p>
           </div>
         )}
@@ -315,24 +369,53 @@ export function SetupWizard({
   );
 }
 
-function Steps({ step, total }: { step: number; total: number }) {
+function Steps({
+  step,
+  total,
+  labels,
+}: {
+  step: number;
+  total: number;
+  labels: string[];
+}) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start justify-center gap-1">
       {Array.from({ length: total }, (_, idx) => {
         const i = idx + 1;
+        const reached = i <= step;
+        const active = i === step;
         return (
-          <div key={i} className="flex items-center gap-2">
-            <div
-              className={
-                "w-7 h-7 rounded-full grid place-items-center text-xs font-medium " +
-                (i <= step ? "bg-[#2563EB] text-white" : "bg-black/8 text-black/45")
-              }
-            >
-              {i}
+          <div key={i} className="flex items-start gap-1">
+            <div className="flex flex-col items-center gap-2 w-14">
+              <div
+                className={
+                  "w-7 h-7 rounded-full grid place-items-center text-xs font-medium transition-colors " +
+                  (reached
+                    ? "bg-[#2563EB] text-white"
+                    : "bg-black/8 text-black/45")
+                }
+              >
+                {i}
+              </div>
+              <div
+                className={
+                  "text-[11px] transition-colors text-center " +
+                  (active
+                    ? "text-[#2563EB] font-medium"
+                    : reached
+                      ? "text-black/55"
+                      : "text-black/35")
+                }
+              >
+                {labels[idx]}
+              </div>
             </div>
             {i < total && (
               <div
-                className={"w-8 h-px " + (i < step ? "bg-[#2563EB]" : "bg-black/10")}
+                className={
+                  "w-8 h-px mt-3.5 transition-colors " +
+                  (i < step ? "bg-[#2563EB]" : "bg-black/10")
+                }
               />
             )}
           </div>
@@ -342,25 +425,22 @@ function Steps({ step, total }: { step: number; total: number }) {
   );
 }
 
-function KeyStatus({ label, ok, optional }: { label: string; ok: boolean; optional?: boolean }) {
+function ModeCard({
+  Icon,
+  title,
+  desc,
+}: {
+  Icon: typeof FileText;
+  title: string;
+  desc: string;
+}) {
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-black/[0.02]">
-      <div className="text-sm text-black/75">
-        {label}
-        {optional && <span className="ml-2 text-[11px] text-black/40">（可选）</span>}
+    <div className="rounded-xl border border-black/[0.06] bg-white p-3.5 hover:border-[#2563EB]/30 hover:shadow-[0_4px_14px_-6px_rgba(37,99,235,0.18)] transition-all">
+      <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] flex items-center justify-center text-[#2563EB]">
+        <Icon size={18} strokeWidth={2} />
       </div>
-      <span
-        className={
-          "text-[11px] font-medium px-2 py-0.5 rounded-full " +
-          (ok
-            ? "bg-emerald-100 text-emerald-700"
-            : optional
-              ? "bg-black/5 text-black/45"
-              : "bg-red-100 text-red-700")
-        }
-      >
-        {ok ? "已配置" : "未配置"}
-      </span>
+      <div className="mt-2.5 text-[13px] font-medium text-black/85">{title}</div>
+      <div className="mt-1 text-[11px] text-black/50 leading-relaxed">{desc}</div>
     </div>
   );
 }

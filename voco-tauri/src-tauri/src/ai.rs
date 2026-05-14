@@ -131,10 +131,29 @@ impl AiClient {
     }
 
     pub async fn translate(&self, text: &str, target_lang: &str) -> Result<String> {
+        self.translate_with_hint(text, target_lang, None).await
+    }
+
+    /// Translate with an optional dictionary hint — same shape as
+    /// `polish_with_hint`. Appends the dictionary block to the translate
+    /// system prompt so proper nouns from the user's glossary are preserved
+    /// across the translation.
+    pub async fn translate_with_hint(
+        &self,
+        text: &str,
+        target_lang: &str,
+        hint: Option<&str>,
+    ) -> Result<String> {
         if !has_real_content(text) {
             return Ok(text.to_string());
         }
-        let sys = system_translate(target_lang);
+        let mut sys = system_translate(target_lang);
+        if let Some(h) = hint {
+            if !h.trim().is_empty() {
+                sys.push_str("\n\n");
+                sys.push_str(h);
+            }
+        }
         self.chat(&sys, text).await
     }
 

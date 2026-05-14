@@ -89,6 +89,30 @@ struct RequestCfg<'a> {
     nbest: u32,
     workflow: &'a str,
     sequence: i32,
+    /// User dictionary hot words. v2/asr is not documented to support inline
+    /// hotwords (V3 is — uses this exact shape), but Volcengine's API
+    /// gateway typically ignores unknown JSON fields. So we send it
+    /// optimistically: if v2 honors it we get ASR-level accuracy gains for
+    /// free; if not, it's harmless. Either way the polish/translate hint
+    /// (Dictionary::polish_hint / translate_hint) is the load-bearing path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    corpus: Option<Corpus<'a>>,
+}
+
+#[derive(Serialize)]
+struct Corpus<'a> {
+    context: HotwordContext<'a>,
+}
+
+#[derive(Serialize)]
+struct HotwordContext<'a> {
+    hotwords: Vec<HotWord<'a>>,
+    context_type: &'a str,
+}
+
+#[derive(Serialize)]
+struct HotWord<'a> {
+    word: &'a str,
 }
 
 #[derive(Deserialize, Debug)]
@@ -203,10 +227,31 @@ fn parse_frame(data: &[u8]) -> Result<VolcResponse> {
 
 /// Run one-shot recognition over WebSocket. The audio must be a WAV file
 /// (16 kHz, 16-bit, mono — matches the format we record).
-pub async fn recognize(cfg: &VolcConfig, wav_bytes: &[u8]) -> Result<String> {
+///
+/// `hotwords` is the user's dictionary terms — sent as `request.corpus.context
+/// .hotwords` in V3-style JSON. Empty slice means no corpus block is sent at
+/// all.
+pub async fn recognize(
+    cfg: &VolcConfig,
+    wav_bytes: &[u8],
+    hotwords: &[String],
+) -> Result<String> {
     let (cluster, lang_tag) = cfg.cluster_and_lang_tag();
 
     let request_id = uuid::Uuid::new_v4().to_string();
+    let corpus = if hotwords.is_empty() {
+        None
+    } else {
+        Some(Corpus {
+            context: HotwordContext {
+                hotwords: hotwords
+                    .iter()
+                    .map(|s| HotWord { word: s.as_str() })
+                    .collect(),
+                context_type: "dialog_ctx",
+            },
+        })
+    };
     let payload = RequestPayload {
         app: AppCfg {
             appid: &cfg.appid,
@@ -228,6 +273,7 @@ pub async fn recognize(cfg: &VolcConfig, wav_bytes: &[u8]) -> Result<String> {
             nbest: 1,
             workflow: "audio_in,resample,partition,vad,fe,decode,itn,nlu_punctuate",
             sequence: 1,
+            corpus,
         },
     };
 

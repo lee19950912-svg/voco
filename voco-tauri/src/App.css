@@ -70,6 +70,14 @@ body {
 .voco-bars > span:nth-child(2) { animation-delay: 0.15s; }
 .voco-bars > span:nth-child(3) { animation-delay: 0.30s; }
 
+/* Wizard step fade-in — re-fires on step change because each step's
+   conditional block unmounts/remounts. */
+@keyframes voco-step-fade-kf {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.voco-step-fade { animation: voco-step-fade-kf 240ms ease-out; }
+
 /* Card lift on hover */
 .voco-lift {
   transition:

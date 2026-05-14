@@ -24,8 +24,11 @@ pub struct AppConfig {
     pub translate_target: String, // "ko" | "en" | ...
 
     // Hotkeys
-    pub trigger_polish: String,            // "alt_r"
-    pub trigger_translate_modifier: String, // "shift_r"
+    pub trigger_polish: String,             // "alt_r"
+    pub trigger_translate_modifier: String, // "ctrl_r" — chosen over shift_r
+    // because shift_r combined with alt_r/ctrl_r is Windows's default
+    // "switch IME" hotkey. Defaulting to ctrl_r side-steps that conflict
+    // entirely without asking users to change OS-level settings.
     pub trigger_mode: String,              // "hold" | "toggle"
 
     pub ui_language: String,
@@ -50,7 +53,7 @@ impl Default for AppConfig {
             translate_model: "deepseek-v4-flash".into(),
             translate_target: "ko".into(),
             trigger_polish: "alt_r".into(),
-            trigger_translate_modifier: "shift_r".into(),
+            trigger_translate_modifier: "ctrl_r".into(),
             trigger_mode: "hold".into(),
             ui_language: "zh".into(),
             input_device: String::new(),

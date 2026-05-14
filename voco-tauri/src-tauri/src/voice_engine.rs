@@ -311,7 +311,32 @@ async fn process_pipeline(
         cluster_ko: keys.volc_cluster_ko,
         language: cfg.recognize_language.clone(),
     };
-    let raw_text = volc_recognize(&volc, &wav_bytes).await?;
+    // Build ASR hot words from the user's dictionary — sent optimistically
+    // to v2/asr (Volcengine V3-style corpus block). If v2 strict-validates
+    // and rejects the unknown field, we'd kill all recognition for users
+    // with a non-empty dictionary. So: on a protocol-level error (response
+    // came back but with non-zero code, or JSON parse trouble) we retry
+    // ONCE without the corpus. Network/timeout failures are propagated as
+    // usual — retrying those just doubles the user's wait time.
+    let asr_hotwords = Dictionary::load().asr_hotwords();
+    let raw_text = match volc_recognize(&volc, &wav_bytes, &asr_hotwords).await {
+        Ok(t) => t,
+        Err(e) if !asr_hotwords.is_empty() && {
+            let s = e.to_string();
+            // Volcengine protocol-level errors contain "code=" (e.g. 1010
+            // invalid params, 1013 no speech, etc.). JSON parse trouble
+            // would indicate a schema mismatch on their side. Either is a
+            // signal that the unknown corpus field may be the culprit.
+            s.contains("code=") || s.contains("解析响应 JSON")
+        } =>
+        {
+            tracing::warn!(
+                "火山 ASR 带 corpus 失败（可能 v2 不接受热词字段），不带 corpus 重试一次：{e}"
+            );
+            volc_recognize(&volc, &wav_bytes, &[]).await?
+        }
+        Err(e) => return Err(e),
+    };
 
     // Empty recognition — most likely silence or background noise. Tell the
     // user explicitly so they don't think the app silently swallowed input.
@@ -361,13 +386,20 @@ async fn process_pipeline(
                 "openai" => (&keys.openai, "OpenAI 翻译"),
                 _ => (&keys.relay, "中转站翻译"),
             };
+            // Dictionary also applies to translate: preserve proper nouns
+            // through the translation step (e.g. "飞书" stays "飞书"/"Feishu"
+            // instead of getting translated as "flying book").
+            let hint = Dictionary::load().translate_hint();
             match AiClient::new(
                 &cfg.translate_base_url,
                 api_key,
                 &cfg.translate_model,
                 label,
             ) {
-                Ok(client) => match client.translate(&raw_text, &cfg.translate_target).await {
+                Ok(client) => match client
+                    .translate_with_hint(&raw_text, &cfg.translate_target, hint.as_deref())
+                    .await
+                {
                     Ok(t) if !t.trim().is_empty() => t,
                     Ok(_) => {
                         warning = Some("翻译返回为空，已使用原文。".to_string());

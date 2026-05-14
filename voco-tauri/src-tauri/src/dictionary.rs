@@ -52,6 +52,8 @@ impl Dictionary {
 
     /// Render as a hint to inject into the polish prompt. Returns None if
     /// the dictionary is empty — caller skips the injection.
+    /// Wording is intentionally strong / imperative because DeepSeek tends
+    /// to soft-pedal "preferences" — we want strict replacement.
     pub fn polish_hint(&self) -> Option<String> {
         let terms: Vec<&str> = self
             .entries
@@ -63,8 +65,44 @@ impl Dictionary {
             return None;
         }
         Some(format!(
-            "用户自定义术语表：{}。\n如果识别文本里出现与这些词发音相近但写法不同的词，优先采用术语表里的写法。",
-            terms.join("、")
+            "【词典强制规则·最高优先级】\n\
+            下列是用户自定义的专有名词，必须按这里的写法精确输出：{terms}\n\
+            检测规则：如果识别文本里出现与这些词读音相同/相近但字不同的版本（例如：飞数 → 飞书、力在容 → 李在镕、周鸿一 → 周鸿祎），必须强制替换成词典里的写法，不要保留原识别版本。\n\
+            优先级：这条规则优先于其他任何润色指令——即使输入看起来已经干净，只要包含词典词的近音错字，也必须改。",
+            terms = terms.join("、")
         ))
+    }
+
+    /// Same hint but worded for the translate flow: tell the translator to
+    /// preserve these proper nouns and treat any near-homophone variant as a
+    /// recognition error before translating.
+    pub fn translate_hint(&self) -> Option<String> {
+        let terms: Vec<&str> = self
+            .entries
+            .iter()
+            .map(|e| e.term.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if terms.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "【词典·专有名词必保留】\n\
+            下列是用户自定义的专有名词：{terms}\n\
+            如果识别文本里出现与这些词读音相同/相近但字不同的版本，先在心里把它纠正回词典里的写法，再翻译。\n\
+            翻译结果中遇到这些专有名词时：如果目标语言有官方译名（公司/产品/人名），用官方译名；没有则按发音音译，绝不要意译或替换。",
+            terms = terms.join("、")
+        ))
+    }
+
+    /// Build a hot-words list for the ASR layer. Each entry becomes `{word:
+    /// "<term>"}` — the structure used by Volcengine's V3 ASR (corpus.context
+    /// .hotwords). Empty list when the dictionary has no usable entries.
+    pub fn asr_hotwords(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .map(|e| e.term.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     }
 }
