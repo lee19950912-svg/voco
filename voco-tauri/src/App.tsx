@@ -502,33 +502,51 @@ function HistoryPage({ onClearStats }: { onClearStats: () => void }) {
   );
 }
 
+const DICT_SUGGESTIONS = [
+  "钉钉",
+  "字节跳动",
+  "TikTok",
+  "豆包",
+  "拼多多",
+  "OpenAI",
+];
+
 function DictionaryPage() {
   const [entries, setEntries] = useState<DictEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [newTerm, setNewTerm] = useState("");
   const [newNote, setNewNote] = useState("");
+  const [query, setQuery] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
+  const justSavedTimer = useRef<number | null>(null);
 
   useEffect(() => {
     invoke<{ entries: DictEntry[] }>("get_dictionary")
       .then((d) => setEntries(d.entries ?? []))
       .catch(() => setEntries([]))
       .finally(() => setLoaded(true));
+    return () => {
+      if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
+    };
   }, []);
 
   function persist(next: DictEntry[]) {
     setEntries(next);
     invoke("save_dictionary", { dict: { entries: next } }).catch(console.error);
+    setJustSaved(true);
+    if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
+    justSavedTimer.current = window.setTimeout(() => setJustSaved(false), 1400);
   }
 
-  function addEntry() {
-    const term = newTerm.trim();
-    if (!term) return;
-    if (entries.some((e) => e.term === term)) {
+  function addEntry(term?: string, note?: string) {
+    const t = (term ?? newTerm).trim();
+    if (!t) return;
+    if (entries.some((e) => e.term === t)) {
       setNewTerm("");
       setNewNote("");
       return;
     }
-    persist([{ term, note: newNote.trim() }, ...entries]);
+    persist([{ term: t, note: (note ?? newNote).trim() }, ...entries]);
     setNewTerm("");
     setNewNote("");
   }
@@ -537,12 +555,72 @@ function DictionaryPage() {
     persist(entries.filter((_, i) => i !== idx));
   }
 
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? entries.filter(
+        (e) =>
+          e.term.toLowerCase().includes(q) ||
+          e.note.toLowerCase().includes(q),
+      )
+    : entries;
+  const unseenSuggestions = DICT_SUGGESTIONS.filter(
+    (s) => !entries.some((e) => e.term === s),
+  );
+
   return (
     <div className="p-8 max-w-[1200px] mx-auto">
       <h1 className="text-[28px] font-semibold tracking-tight">词典</h1>
-      <p className="mt-3 text-[14px] text-black/55">
-        把你常说的专有名词、人名、公司名加进来。VoCo 会在润色时优先用这里的写法，避免被识别错。
+      <p className="mt-3 text-[14px] text-black/55 leading-relaxed">
+        碰到常被识别错的词，加进这里。下次说话时 VoCo 会按你写的版本输出，不再认错。
       </p>
+      <div
+        className={
+          "mt-3 inline-flex items-center gap-2 text-[12px] rounded-full px-3 py-1 transition-colors " +
+          (justSaved
+            ? "text-emerald-700 bg-emerald-50 border border-emerald-500/30"
+            : "text-[#2563EB] bg-[#EFF6FF] border border-[#2563EB]/15")
+        }
+      >
+        <Check size={12} strokeWidth={2.4} />
+        {justSaved ? "已保存 — 下一次说话就用新词典" : "改完立即生效，下一次说话就用新词典"}
+      </div>
+
+      {/* Concrete before/after — answers "what does this page do" at a glance. */}
+      <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-5">
+        <div className="text-[11px] text-black/40 uppercase tracking-wider font-medium">
+          举个例子
+        </div>
+        <div className="mt-4 flex items-stretch gap-4">
+          <div className="flex-1 rounded-xl border border-black/[0.05] bg-black/[0.015] p-4">
+            <div className="text-[11px] text-black/45 mb-1">没加词典时</div>
+            <div className="text-[13px] text-black/85">
+              你说：「用<span className="font-medium">飞书</span>发我消息」
+            </div>
+            <div className="text-[11px] text-black/45 mt-2 mb-1">VoCo 写出</div>
+            <div className="text-[13px] text-red-600 font-medium">
+              用飞数发我消息
+            </div>
+          </div>
+          <div className="flex items-center text-black/30">→</div>
+          <div className="flex-1 rounded-xl border border-emerald-500/20 bg-emerald-50/40 p-4">
+            <div className="text-[11px] text-emerald-700/80 mb-1">
+              加了「飞书」之后
+            </div>
+            <div className="text-[13px] text-black/85">
+              你说：「用<span className="font-medium">飞书</span>发我消息」
+            </div>
+            <div className="text-[11px] text-emerald-700/80 mt-2 mb-1">VoCo 写出</div>
+            <div className="text-[13px] text-emerald-700 font-medium">
+              用飞书发我消息
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 text-[12px] text-black/50 leading-relaxed">
+          适合加：<span className="text-black/70">人名 · 公司名 · 产品名 · 缩写（CTO / SaaS）· 行业黑话 · 项目代号</span>
+          <br />
+          不用加：<span className="text-black/70">日常常用词（"你好"、"谢谢"这些 VoCo 本来就识别得准）</span>
+        </div>
+      </div>
 
       <Card title="添加词条" icon={<Plus size={16} strokeWidth={1.8} />}>
         <div className="flex gap-3">
@@ -552,7 +630,7 @@ function DictionaryPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") addEntry();
             }}
-            placeholder="词条，例如：李在镕"
+            placeholder="常被识别错的词，例如：飞书"
             className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
           />
           <input
@@ -561,11 +639,11 @@ function DictionaryPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") addEntry();
             }}
-            placeholder="说明（可空）"
+            placeholder="备注（自己看的，可空）"
             className="flex-1 border border-black/[0.08] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
           />
           <button
-            onClick={addEntry}
+            onClick={() => addEntry()}
             disabled={!newTerm.trim()}
             className="bg-[#0A0A0B] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#27272A] transition-colors disabled:opacity-40"
           >
@@ -574,39 +652,83 @@ function DictionaryPage() {
         </div>
       </Card>
 
+      {loaded && entries.length === 0 && unseenSuggestions.length > 0 && (
+        <Card title="点一下加进词典，立刻生效" icon={<Plus size={16} strokeWidth={1.8} />}>
+          <div className="flex flex-wrap gap-2">
+            {unseenSuggestions.map((s) => (
+              <button
+                key={s}
+                onClick={() => addEntry(s)}
+                className="text-[12px] px-3 py-1.5 rounded-full border border-black/[0.08] bg-white hover:border-[#2563EB]/40 hover:text-[#2563EB] transition-colors flex items-center gap-1"
+              >
+                <Plus size={12} strokeWidth={2} />
+                {s}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card
         title={`已收录 ${entries.length} 个`}
         icon={<BookOpen size={16} strokeWidth={1.8} />}
       >
+        {entries.length > 0 && (
+          <div className="relative mb-3">
+            <Search
+              size={14}
+              strokeWidth={2}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-black/35"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索词条…"
+              className="w-full border border-black/[0.08] bg-white rounded-lg pl-9 pr-3 py-2 text-[13px] focus:outline-none focus:border-[#2563EB]/40 focus:ring-2 focus:ring-[#2563EB]/10"
+            />
+          </div>
+        )}
         <div className="space-y-1">
           {!loaded && (
             <div className="text-black/45 text-[13px] py-2">加载中…</div>
           )}
           {loaded && entries.length === 0 && (
             <div className="text-black/45 text-[13px] py-2">
-              还没有词条 — 上面加一个试试。
+              还没有词条 — 上面加一个，或点击上面的建议词试试。
             </div>
           )}
-          {entries.map((e, i) => (
-            <div
-              key={`${e.term}-${i}`}
-              className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-black/[0.02] group"
-            >
-              <div className="flex-1">
-                <div className="text-[13px] font-medium text-black/85">{e.term}</div>
-                {e.note && (
-                  <div className="text-[11px] text-black/45 mt-0.5">{e.note}</div>
-                )}
-              </div>
-              <button
-                onClick={() => removeEntry(i)}
-                className="text-[11px] text-black/40 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-50 flex items-center gap-1"
-              >
-                <Trash2 size={12} strokeWidth={1.8} />
-                删除
-              </button>
+          {loaded && entries.length > 0 && filtered.length === 0 && (
+            <div className="text-black/45 text-[13px] py-2">
+              没找到含「{query}」的词条。
             </div>
-          ))}
+          )}
+          {filtered.map((e) => {
+            // Look up the real index in the unfiltered array so delete still
+            // works correctly when the list is being filtered.
+            const realIdx = entries.findIndex(
+              (x) => x.term === e.term && x.note === e.note,
+            );
+            return (
+              <div
+                key={`${e.term}-${realIdx}`}
+                className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-black/[0.02] group"
+              >
+                <div className="flex-1">
+                  <div className="text-[13px] font-medium text-black/85">{e.term}</div>
+                  {e.note && (
+                    <div className="text-[11px] text-black/45 mt-0.5">{e.note}</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeEntry(realIdx)}
+                  className="text-[11px] text-black/40 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded hover:bg-red-50 flex items-center gap-1"
+                >
+                  <Trash2 size={12} strokeWidth={1.8} />
+                  删除
+                </button>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>
