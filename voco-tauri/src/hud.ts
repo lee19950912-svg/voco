@@ -4,6 +4,13 @@
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
+window.addEventListener("contextmenu", (e) => e.preventDefault());
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F5" || e.key === "F12") return e.preventDefault();
+  if (e.ctrlKey && (e.key === "r" || e.key === "R")) return e.preventDefault();
+  if (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "i" || e.key === "J" || e.key === "j")) return e.preventDefault();
+});
+
 const BAR_COUNT = 5;
 const FRAME_MS = 33;
 const LISTEN_EASE = 0.32;          // higher = snappier follow
