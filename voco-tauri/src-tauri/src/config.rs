@@ -54,7 +54,7 @@ impl Default for AppConfig {
             recognize_language: "zh".into(),
             polish_engine: "deepseek".into(),
             polish_base_url: "https://api.deepseek.com".into(),
-            polish_model: "deepseek-v4-pro".into(),
+            polish_model: "deepseek-v4-flash".into(),
             translate_engine: "deepseek".into(),
             translate_base_url: "https://api.deepseek.com".into(),
             translate_model: "deepseek-v4-flash".into(),
@@ -94,7 +94,17 @@ impl AppConfig {
         let text = std::fs::read_to_string(&path)?;
         // We use serde_yaml here since the legacy Python config used YAML; TOML
         // would be cleaner but yaml lets users with old configs port over.
-        let cfg: Self = serde_yaml::from_str(&text).unwrap_or_default();
+        let mut cfg: Self = serde_yaml::from_str(&text).unwrap_or_default();
+        // One-shot migration: existing users on the slow polish-pro default
+        // (1-2s/call, painful across cross-border RTT) get bumped to flash
+        // (300-800ms). Short-form polish quality is indistinguishable between
+        // the two. Translation already defaults to flash, so this just makes
+        // both AI steps consistent.
+        if cfg.polish_model == "deepseek-v4-pro" {
+            cfg.polish_model = "deepseek-v4-flash".into();
+            let _ = cfg.save();
+            tracing::info!("config: migrated polish_model from v4-pro to v4-flash for latency");
+        }
         Ok(cfg)
     }
 
