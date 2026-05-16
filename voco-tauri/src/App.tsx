@@ -942,7 +942,7 @@ function SettingsPage({
           </div>
         </Row>
         <p className="text-[11px] text-black/45 pt-1 pb-1">
-          录音开始、结束、识别中、出字成功、出错各有一个轻量提示音。完全靠耳朵就能知道软件在干什么。
+          按下快捷键 1 声，文字出现 1 声。2 个轻量提示音让你不用看屏幕就知道说完了。
         </p>
       </Card>
 

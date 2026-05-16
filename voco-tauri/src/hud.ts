@@ -81,17 +81,16 @@ function processing() {
 }
 
 // --- Audio cues ---------------------------------------------------------
-// Five WAV cues shipped from /public/sounds/. Decoded once at startup so
+// Two WAV cues shipped from /public/sounds/. Decoded once at startup so
 // playback is gap-free. Volume + on/off are read from voco.toml on startup
 // and refreshed whenever the settings page emits "voco:sound_config".
-type CueName = "start" | "stop" | "processing" | "success" | "error";
+// Mirrors Speakly / Typeless — they both ship only start + end cues. More
+// cues per session feels noisy in practice.
+type CueName = "start" | "success";
 
 const CUE_FILES: Record<CueName, string> = {
   start: "/sounds/voco_record_start.wav",
-  stop: "/sounds/voco_record_stop.wav",
-  processing: "/sounds/voco_processing.wav",
   success: "/sounds/voco_success.wav",
-  error: "/sounds/voco_error.wav",
 };
 
 let audioCtx: AudioContext | null = null;
@@ -167,25 +166,12 @@ invoke<SoundConfig>("get_config")
   .catch(() => {});
 listen<SoundConfig>("voco:sound_config", (e) => applySoundConfig(e.payload)).catch(() => {});
 
-// Delayed "still processing" cue — fires only if the pipeline takes long
-// enough that the user might wonder whether the app froze.
-const PROCESSING_DELAY_MS = 400;
-let processingDelayTimer: number | null = null;
-function clearProcessingDelay() {
-  if (processingDelayTimer !== null) {
-    clearTimeout(processingDelayTimer);
-    processingDelayTimer = null;
-  }
-}
-
-// Result/error cues replace the generic "stop" close-out. If one of these
-// arrives we suppress the otherwise automatic close-out cue.
-let resultCuePending: CueName | null = null;
+// Closing cue: the "success" sound plays on any processing→hidden close
+// (matches Speakly's behavior — they don't distinguish success from error
+// in audio; the visual HUD/error toast carries that information).
+let closingCueArmed = false;
 listen("voco:result", () => {
-  resultCuePending = "success";
-}).catch(() => {});
-listen("voco:error", () => {
-  resultCuePending = "error";
+  closingCueArmed = true;
 }).catch(() => {});
 
 preloadCues();
@@ -194,17 +180,14 @@ function applyState(next: State) {
   if (state === next) return;
   const prev = state;
   stopTimer();
-  clearProcessingDelay();
   state = next;
   if (next === "hidden") {
-    // Closing out a real session. If the backend just told us the outcome
-    // (success / error), play that specific cue and clear it. Otherwise
-    // (e.g. an empty recording cancelled before processing) the "stop" cue
-    // we already played on listening→processing is the only one — don't
-    // double-beep.
-    if (resultCuePending) {
-      play(resultCuePending);
-      resultCuePending = null;
+    // Play "success" only when the session actually produced a result.
+    // Cancels (listening→hidden with no result event) stay silent — no
+    // text was pasted, so the user doesn't need a "done" sound.
+    if (closingCueArmed) {
+      play("success");
+      closingCueArmed = false;
     }
     hud.classList.remove("show");
     return;
@@ -218,17 +201,9 @@ function applyState(next: State) {
       listenTargets[i] = REST_HEIGHT;
       listenHeights[i] = REST_HEIGHT;
     }
-    // Fresh open. Clear any stale result flag so an old session's success
-    // beep can't leak into this one.
-    resultCuePending = null;
+    // Fresh open — clear any leftover arming flag from a prior session.
+    closingCueArmed = false;
     if (prev === "hidden") play("start");
-  } else if (next === "processing") {
-    // User just released the hotkey — immediate "stop" feedback, then a
-    // delayed "still working" cue if the pipeline is taking a moment.
-    play("stop");
-    processingDelayTimer = window.setTimeout(() => {
-      if (state === "processing") play("processing");
-    }, PROCESSING_DELAY_MS);
   }
   hud.classList.add("show");
   timer = window.setInterval(() => {
