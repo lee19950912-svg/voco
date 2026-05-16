@@ -96,6 +96,23 @@ function App() {
       .then(setAutostart)
       .catch(() => setAutostart(false));
 
+    // Silent background update check 8s after launch. Failures (no endpoint
+    // yet, server down, no network) are normal and intentionally swallowed —
+    // the user can always trigger a manual check from Settings → 检查更新.
+    // We just log so we know auto-check fired, no UI noise.
+    const updateTimer = setTimeout(() => {
+      checkForUpdate()
+        .then((u) => {
+          if (u) {
+            // eslint-disable-next-line no-console
+            console.log(`[updater] update available: v${u.version}`);
+          }
+        })
+        .catch(() => {
+          /* silent — user can manually retry */
+        });
+    }, 8000);
+
     // StrictMode double-mounts effects in dev. `listen()` returns a Promise,
     // so the unsubscribe function isn't available synchronously — if we just
     // push it into an array and call them all on cleanup, the first cleanup
@@ -121,6 +138,7 @@ function App() {
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());
+      clearTimeout(updateTimer);
     };
   }, []);
 

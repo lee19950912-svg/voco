@@ -24,6 +24,10 @@ dist-ssr
 history.json
 stats.json
 
+# Release artifacts (built locally, uploaded to GitHub Releases / hosting).
+# Don't bloat the repo with 20MB exe files — they belong on the release host.
+release/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
