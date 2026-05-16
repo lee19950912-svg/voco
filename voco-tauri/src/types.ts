@@ -18,6 +18,8 @@ export interface VoCoConfig {
   input_device: string;
   first_run_completed: boolean;
   mute_others_while_recording: boolean;
+  sound_enabled: boolean;
+  sound_volume: number;
 }
 
 export interface VoCoResult {

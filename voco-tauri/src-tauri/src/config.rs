@@ -38,6 +38,13 @@ pub struct AppConfig {
     /// Mute the default speakers while a recording is in progress, restore on
     /// release. Mirrors Wispr Flow's Windows default. On by default.
     pub mute_others_while_recording: bool,
+
+    /// HUD audio cues (start / stop / processing / success / error). When
+    /// disabled the HUD stays visually identical but plays nothing.
+    pub sound_enabled: bool,
+    /// 0.0–1.0. Multiplier applied to every cue. Default 0.7 keeps the cues
+    /// audible without being startling on a quiet desk.
+    pub sound_volume: f32,
 }
 
 impl Default for AppConfig {
@@ -59,6 +66,8 @@ impl Default for AppConfig {
             input_device: String::new(),
             first_run_completed: false,
             mute_others_while_recording: true,
+            sound_enabled: true,
+            sound_volume: 0.7,
         }
     }
 }

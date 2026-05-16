@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { check as checkForUpdate } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -19,6 +19,7 @@ import {
   Trash2,
   Search,
   Mic,
+  Volume2,
   Power,
   Info,
   Keyboard,
@@ -825,6 +826,15 @@ function SettingsPage({
     const next = { ...cfg, [key]: value };
     setCfg(next);
     invoke("save_config", { cfg: next }).catch(console.error);
+    // HUD lives in its own webview and caches sound settings — push the
+    // latest values so a toggle / slider drag takes effect on the very
+    // next recording without an app restart.
+    if (key === "sound_enabled" || key === "sound_volume") {
+      emit("voco:sound_config", {
+        sound_enabled: next.sound_enabled,
+        sound_volume: next.sound_volume,
+      }).catch(() => {});
+    }
   }
 
   // Switching translate engine needs to flip base_url + model + engine
@@ -892,6 +902,47 @@ function SettingsPage({
         </Row>
         <p className="text-[11px] text-black/45 pt-1 pb-1">
           按住快捷键说话时暂时关闭电脑外放，松开后恢复。本来就静音 / 没声音时不动。
+        </p>
+      </Card>
+
+      <Card title="提示音" icon={<Volume2 size={16} strokeWidth={1.8} />}>
+        <Row label="开关">
+          <Toggle
+            checked={cfg.sound_enabled}
+            onChange={(v) => update("sound_enabled", v)}
+          />
+        </Row>
+        <Row label="音量">
+          <div className="flex items-center gap-3 min-w-[280px] justify-end">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              disabled={!cfg.sound_enabled}
+              value={Math.round((cfg.sound_volume ?? 0.7) * 100)}
+              // Live UI update only — no disk write per pixel of drag. We
+              // commit on release (handlers below). Read the final value
+              // straight off the input element so we don't depend on React
+              // having flushed the latest setCfg before the release event.
+              onChange={(e) =>
+                setCfg({ ...cfg, sound_volume: Number(e.target.value) / 100 })
+              }
+              onPointerUp={(e) =>
+                update("sound_volume", Number(e.currentTarget.value) / 100)
+              }
+              onKeyUp={(e) =>
+                update("sound_volume", Number(e.currentTarget.value) / 100)
+              }
+              className="w-[220px] accent-[#2563eb] disabled:opacity-40"
+            />
+            <span className="text-[12px] text-black/55 voco-mono w-[34px] text-right">
+              {Math.round((cfg.sound_volume ?? 0.7) * 100)}%
+            </span>
+          </div>
+        </Row>
+        <p className="text-[11px] text-black/45 pt-1 pb-1">
+          录音开始、结束、识别中、出字成功、出错各有一个轻量提示音。完全靠耳朵就能知道软件在干什么。
         </p>
       </Card>
 
