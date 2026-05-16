@@ -19,6 +19,8 @@ dist-ssr
 
 # User-generated runtime files (mirrors root project)
 *.wav
+# Exception: bundled HUD cue pack must ship with the app.
+!public/sounds/*.wav
 history.json
 stats.json
 
