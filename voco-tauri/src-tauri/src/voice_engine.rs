@@ -341,8 +341,11 @@ async fn process_pipeline(
         } else {
             Some(cfg.recognize_language.as_str())
         };
+        // Share the same base_url as polish/translate — apply_region keeps
+        // them in lockstep, so the user can flip "overseas" between OpenAI
+        // direct / yunwu / any other relay without code changes.
         crate::openai_asr::recognize(
-            "https://yunwu.ai/v1",
+            &cfg.polish_base_url,
             &keys.overseas,
             &wav_bytes,
             lang_hint,
@@ -405,8 +408,16 @@ async fn process_pipeline(
             // Region drives both the key picked and the label shown in
             // error messages. Engine URLs/models were already pinned to
             // the right service by apply_region() at save time.
+            // For overseas: prefer the chat-specific key (yunwu scopes
+            // keys per model group), fall back to the general overseas
+            // key if the user only set one.
+            let overseas_chat_key = if keys.overseas_chat.is_empty() {
+                &keys.overseas
+            } else {
+                &keys.overseas_chat
+            };
             let (api_key, label) = if cfg.region == "overseas" {
-                (&keys.overseas, "海外 AI 润色")
+                (overseas_chat_key, "海外 AI 润色")
             } else {
                 (&keys.deepseek, "DeepSeek 润色")
             };
@@ -439,9 +450,15 @@ async fn process_pipeline(
             }
         }
         "translate" => {
-            // Same region-driven key pick as polish above.
+            // Same region-driven key pick as polish above. Chat key
+            // preferred, ASR key as single-key fallback.
+            let overseas_chat_key = if keys.overseas_chat.is_empty() {
+                &keys.overseas
+            } else {
+                &keys.overseas_chat
+            };
             let (api_key, label) = if cfg.region == "overseas" {
-                (&keys.overseas, "海外 AI 翻译")
+                (overseas_chat_key, "海外 AI 翻译")
             } else {
                 (&keys.deepseek, "DeepSeek 翻译")
             };

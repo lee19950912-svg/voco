@@ -15,12 +15,18 @@ use serde::Deserialize;
 
 use crate::ai::SHARED_HTTP;
 
-/// First-choice model. Newer (Mar 2025), cheaper ($0.003/min vs $0.006),
-/// and better Korean accuracy per OpenAI's own benchmarks.
-const PREFERRED_MODEL: &str = "gpt-4o-mini-transcribe";
-/// Drop-in fallback if the relay doesn't carry the preferred model yet
-/// (some relay providers only support whisper-1). Same API shape.
-const FALLBACK_MODEL: &str = "whisper-1";
+/// Newer (Mar 2025), cheaper than whisper-1, better Korean accuracy.
+/// We hardcode this one model: the relay scopes permissions per model,
+/// so a "fallback" to whisper-1 / 4o-transcribe is almost always 403 in
+/// practice (users buy ONE model). Better to retry the same one and
+/// surface a clear error if it stays down.
+const ASR_MODEL: &str = "gpt-4o-mini-transcribe";
+/// Wait between retries when the relay returns 429. Short enough to feel
+/// instant on a brief saturation spike, long enough that we don't slam
+/// the relay during a real outage.
+const RETRY_DELAY_MS: u64 = 1500;
+/// Max retries on 429. 1 retry = 2 total attempts.
+const MAX_RETRIES_ON_429: usize = 1;
 
 #[derive(Deserialize)]
 struct TranscriptionResponse {
@@ -45,17 +51,26 @@ pub async fn recognize(
         return Err(anyhow!("海外档的 base_url 未设置"));
     }
 
-    match try_model(base_url, api_key, wav_bytes, language, PREFERRED_MODEL).await {
-        Ok(text) => Ok(text),
-        Err(e) => {
-            // Relay rejected the preferred model — try the universally
-            // supported fallback. We only retry on "model not available"-
-            // style errors; auth / network failures propagate directly via
-            // the second try (no extra retry layer).
-            tracing::warn!(
-                "OpenAI ASR: {PREFERRED_MODEL} 失败（{e}），回退 {FALLBACK_MODEL}"
-            );
-            try_model(base_url, api_key, wav_bytes, language, FALLBACK_MODEL).await
+    let mut attempt = 0;
+    loop {
+        match try_model(base_url, api_key, wav_bytes, language, ASR_MODEL).await {
+            Ok(text) => return Ok(text),
+            Err(e) => {
+                // Only 429 (rate limit / upstream saturation) is worth
+                // retrying. 4xx auth/permission errors won't change on
+                // re-try; 5xx might but rarely recovers within seconds.
+                let is_429 = e.to_string().contains("HTTP 429");
+                if is_429 && attempt < MAX_RETRIES_ON_429 {
+                    attempt += 1;
+                    tracing::warn!(
+                        "OpenAI ASR 429（云雾上游饱和），{}ms 后重试 ({}/{})",
+                        RETRY_DELAY_MS, attempt, MAX_RETRIES_ON_429
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS)).await;
+                    continue;
+                }
+                return Err(e);
+            }
         }
     }
 }

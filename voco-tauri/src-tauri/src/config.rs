@@ -113,6 +113,19 @@ impl AppConfig {
             let _ = cfg.save();
             tracing::info!("config: migrated polish_model from v4-pro to v4-flash for latency");
         }
+        // One-shot migration: users who configured "overseas" against the
+        // yunwu.ai relay during dev get auto-migrated to OpenAI direct.
+        // yunwu's per-model permission system caused too much friction
+        // (long 429 saturations, separate keys per model group). Direct
+        // OpenAI is simpler: one key, no upstream pool issues.
+        if cfg.region == "overseas"
+            && (cfg.polish_base_url.contains("yunwu.ai")
+                || cfg.translate_base_url.contains("yunwu.ai"))
+        {
+            cfg.apply_region();
+            let _ = cfg.save();
+            tracing::info!("config: migrated overseas base_url from yunwu.ai to api.openai.com");
+        }
         Ok(cfg)
     }
 
@@ -131,15 +144,16 @@ impl AppConfig {
     pub fn apply_region(&mut self) {
         match self.region.as_str() {
             "overseas" => {
-                // OpenAI 全家套 via yunwu.ai relay. Same base URL for both
-                // chat and audio endpoints — yunwu is OpenAI-API-compatible.
-                let yunwu = "https://yunwu.ai/v1".to_string();
+                // OpenAI direct (api.openai.com/v1). One key covers ASR
+                // + chat (unlike per-model relays). Same base URL for both
+                // /audio/transcriptions and /chat/completions endpoints.
+                let openai = "https://api.openai.com/v1".to_string();
                 self.recognize_engine = "openai".into();
                 self.polish_engine = "openai".into();
-                self.polish_base_url = yunwu.clone();
+                self.polish_base_url = openai.clone();
                 self.polish_model = "gpt-4o-mini".into();
                 self.translate_engine = "openai".into();
-                self.translate_base_url = yunwu;
+                self.translate_base_url = openai;
                 self.translate_model = "gpt-4o-mini".into();
             }
             _ => {
@@ -162,10 +176,14 @@ pub struct ApiKeys {
     pub deepseek: String,
     pub openai: String,
     pub relay: String,
-    /// Single API key for the overseas relay (currently yunwu.ai). Used for
-    /// both ASR (/v1/audio/transcriptions) and chat (/v1/chat/completions)
-    /// when region is set to "overseas".
+    /// Overseas relay key for ASR (/v1/audio/transcriptions). yunwu.ai
+    /// scopes each key to specific model groups, so ASR and chat may need
+    /// distinct keys depending on what the user bought.
     pub overseas: String,
+    /// Overseas relay key for chat (/v1/chat/completions, used for polish
+    /// and translate). Falls back to `overseas` if not set so single-key
+    /// users (whose key covers everything) still work.
+    pub overseas_chat: String,
     pub volc_app_id: String,
     pub volc_access_token: String,
     pub volc_cluster_zh: String,
@@ -180,6 +198,7 @@ impl ApiKeys {
             openai: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
             relay: std::env::var("RELAY_API_KEY").unwrap_or_default(),
             overseas: std::env::var("OVERSEAS_API_KEY").unwrap_or_default(),
+            overseas_chat: std::env::var("OVERSEAS_CHAT_API_KEY").unwrap_or_default(),
             volc_app_id: std::env::var("VOLC_APP_ID").unwrap_or_default(),
             volc_access_token: std::env::var("VOLC_ACCESS_TOKEN").unwrap_or_default(),
             volc_cluster_zh: std::env::var("VOLC_CLUSTER_ZH")
