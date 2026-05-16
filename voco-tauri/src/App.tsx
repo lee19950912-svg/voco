@@ -1095,66 +1095,6 @@ function SettingsPage({
 
 // ---------- Reusable bits ----------
 
-/**
- * Action button with built-in press-down animation + "just clicked"
- * confirmation. For actions whose actual effect happens outside the app
- * (opening system settings, copying to clipboard, etc.) — the user otherwise
- * has no visual signal that the click registered. Shows `confirmLabel` for
- * 1.6s after click, then returns to normal.
- */
-function ActionButton({
-  onClick,
-  children,
-  confirmLabel,
-  className = "",
-  disabled = false,
-}: {
-  onClick: () => void | Promise<void>;
-  children: React.ReactNode;
-  confirmLabel?: React.ReactNode;
-  className?: string;
-  disabled?: boolean;
-}) {
-  const [justFired, setJustFired] = useState(false);
-  const timerRef = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
-  function handle() {
-    if (disabled) return;
-    void onClick();
-    if (confirmLabel) {
-      setJustFired(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => setJustFired(false), 1600);
-    }
-  }
-  return (
-    <button
-      onClick={handle}
-      disabled={disabled}
-      className={
-        "inline-flex items-center gap-1.5 transition-all duration-150 " +
-        "active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed " +
-        "disabled:active:scale-100 " +
-        className
-      }
-    >
-      {justFired && confirmLabel ? (
-        <>
-          <Check size={12} strokeWidth={2.6} />
-          {confirmLabel}
-        </>
-      ) : (
-        children
-      )}
-    </button>
-  );
-}
-
 function Card({
   title,
   icon,
