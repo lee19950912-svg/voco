@@ -126,17 +126,21 @@ fn spawn_stop(app: &AppHandle, engine: &Arc<VoiceEngine>, mode: &str) {
 
 /// Resolve current hotkey settings from disk. Called at startup and on every
 /// reload signal — keeps everything centralized.
-fn load_hotkey_settings() -> (u16, u16, bool, String, String) {
+fn load_hotkey_settings() -> (u16, u16, bool, String, String, String) {
     let cfg = AppConfig::load().unwrap_or_default();
     let trigger_vk = vk_from_code(&cfg.trigger_polish).unwrap_or(VK_RMENU.0);
     let translate_vk = vk_from_code(&cfg.trigger_translate_modifier).unwrap_or(VK_RSHIFT.0);
     let is_toggle = cfg.trigger_mode.eq_ignore_ascii_case("toggle");
+    // default_action drives what a bare press does — "polish" (current
+    // behavior, AI cleans output) or "raw" (ASR only, paste verbatim).
+    let default_action = if cfg.default_action == "raw" { "raw" } else { "polish" }.to_string();
     (
         trigger_vk,
         translate_vk,
         is_toggle,
         cfg.trigger_polish,
         cfg.trigger_translate_modifier,
+        default_action,
     )
 }
 
@@ -146,8 +150,14 @@ fn run(
     stop: Arc<AtomicBool>,
     reload: Arc<AtomicBool>,
 ) {
-    let (mut trigger_vk, mut translate_vk, mut is_toggle, mut trigger_label, mut modifier_label) =
-        load_hotkey_settings();
+    let (
+        mut trigger_vk,
+        mut translate_vk,
+        mut is_toggle,
+        mut trigger_label,
+        mut modifier_label,
+        mut default_action,
+    ) = load_hotkey_settings();
     tracing::info!(
         "hotkey: trigger={} (vk=0x{:X}), translate_modifier={} (vk=0x{:X}), mode={}",
         trigger_label,
@@ -175,12 +185,13 @@ fn run(
         // restarting the app. Reset the state machine so a held key doesn't
         // get mis-interpreted under the new bindings.
         if reload.swap(false, Ordering::Relaxed) {
-            let (t_vk, m_vk, toggle, t_label, m_label) = load_hotkey_settings();
+            let (t_vk, m_vk, toggle, t_label, m_label, def_action) = load_hotkey_settings();
             trigger_vk = t_vk;
             translate_vk = m_vk;
             is_toggle = toggle;
             trigger_label = t_label;
             modifier_label = m_label;
+            default_action = def_action;
             trigger_was_down = false;
             translate_seen = false;
             toggle_recording = false;
@@ -211,7 +222,7 @@ fn run(
                 } else {
                     // Second press — close out the session.
                     toggle_recording = false;
-                    let mode = if translate_seen { "translate" } else { "polish" };
+                    let mode = if translate_seen { "translate" } else { default_action.as_str() };
                     spawn_stop(&app, &engine, mode);
                     translate_seen = false;
                 }

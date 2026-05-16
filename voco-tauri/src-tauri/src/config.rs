@@ -52,6 +52,13 @@ pub struct AppConfig {
     /// First-run default comes from system locale (zh-CN → china, else overseas).
     /// User can flip in Settings or wizard at any time.
     pub region: String,
+
+    /// What "bare hotkey press" produces (no modifier).
+    /// "polish" → run ASR + AI polish (cleaner output, ~+0.5-1s latency)
+    /// "raw"    → run ASR only, paste verbatim (faster, cheaper, more
+    ///            predictable; good for legal/medical/quoting scenarios).
+    /// Translate is always available via the modifier key regardless.
+    pub default_action: String,
 }
 
 impl Default for AppConfig {
@@ -76,6 +83,7 @@ impl Default for AppConfig {
             sound_enabled: true,
             sound_volume: 0.7,
             region: "china".into(),
+            default_action: "polish".into(),
         }
     }
 }

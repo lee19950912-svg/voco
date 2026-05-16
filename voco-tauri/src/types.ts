@@ -20,6 +20,8 @@ export interface VoCoConfig {
   mute_others_while_recording: boolean;
   sound_enabled: boolean;
   sound_volume: number;
+  region?: string;
+  default_action?: string;
 }
 
 export interface VoCoResult {

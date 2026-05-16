@@ -21,6 +21,7 @@ import {
   Mic,
   Volume2,
   Globe,
+  Sparkles,
   Power,
   Info,
   Keyboard,
@@ -878,6 +879,26 @@ function SettingsPage({
         <p className="text-[11px] text-black/45 pt-3 pb-1">
           切换后立即生效，下次录音就用对应的服务。海外档需要先在 .env 里设置
           OVERSEAS_API_KEY。
+        </p>
+      </Card>
+
+      <Card title="按下快捷键时" icon={<Sparkles size={16} strokeWidth={1.8} />}>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <RegionOption
+            label="AI 润色"
+            desc="去口水话、修标点、按场景调风格（默认）"
+            selected={(cfg.default_action ?? "polish") !== "raw"}
+            onSelect={() => update("default_action", "polish")}
+          />
+          <RegionOption
+            label="原文直出"
+            desc="只识别不润色，快 0.5-1 秒，AI 不改你的话"
+            selected={(cfg.default_action ?? "polish") === "raw"}
+            onSelect={() => update("default_action", "raw")}
+          />
+        </div>
+        <p className="text-[11px] text-black/45 pt-3 pb-1">
+          翻译模式（右 Alt + 修饰键）不受这个开关影响，永远走 AI 翻译。
         </p>
       </Card>
 
