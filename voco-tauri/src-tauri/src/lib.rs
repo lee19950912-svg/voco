@@ -243,6 +243,10 @@ pub fn run() {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             candidates.push(parent.join(".env"));
+            // Tauri bundles `bundle.resources` files under `resources/` next
+            // to the exe — check there too for the personal-use build where
+            // .env is shipped inside the installer.
+            candidates.push(parent.join("resources").join(".env"));
         }
     }
     for rel in [".env", "../.env", "../../.env"] {
