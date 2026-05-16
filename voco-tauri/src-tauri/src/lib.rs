@@ -12,6 +12,7 @@
 //!   stats           : session history + aggregate stats (json file)
 
 mod ai;
+mod app_context;
 mod audio;
 #[cfg(windows)]
 mod audio_ducker;

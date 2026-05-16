@@ -80,6 +80,30 @@ fn system_translate(target_lang: &str) -> String {
 
 /// Filter: if the text has no real word characters (letters / digits / CJK),
 /// skip the LLM. Otherwise short pure-punctuation inputs trigger hallucination.
+/// Compose a system prompt from a base + optional dictionary hint + optional
+/// app-context line. Empty/whitespace extras are dropped so we never inject a
+/// dangling `[Context]\n[/Context]` block.
+fn build_system(base: &str, hint: Option<&str>, context: Option<&str>) -> String {
+    let mut out = String::with_capacity(base.len() + 256);
+    out.push_str(base);
+    if let Some(h) = hint {
+        if !h.trim().is_empty() {
+            out.push_str("\n\n");
+            out.push_str(h);
+        }
+    }
+    if let Some(c) = context {
+        if !c.trim().is_empty() {
+            // [Context] tag mirrors Speakly's AGENTS.md pattern — clearly
+            // metadata, not text-to-process.
+            out.push_str("\n\n[Context]\n");
+            out.push_str(c.trim());
+            out.push_str("\n[/Context]");
+        }
+    }
+    out
+}
+
 fn has_real_content(text: &str) -> bool {
     text.chars().any(|c| {
         c.is_alphanumeric() || ('\u{4e00}'..='\u{9fff}').contains(&c)
@@ -113,47 +137,44 @@ impl AiClient {
         })
     }
 
-    /// Polish with an optional extra system-prompt hint (e.g., a user
-    /// dictionary of proper nouns). Pass `None` for plain polishing.
+    /// Polish with optional system-prompt extras:
+    ///   * `hint`    — user's dictionary block (proper nouns to preserve)
+    ///   * `context` — one-line snapshot of the foreground app/window so the
+    ///     AI can adapt tone (Slack ≠ formal doc). Wrapped in `[Context]…
+    ///     [/Context]` so the model treats it as metadata, not part of the
+    ///     text to polish.
     pub async fn polish_with_hint(
         &self,
         text: &str,
         hint: Option<&str>,
+        context: Option<&str>,
     ) -> Result<String> {
         if !has_real_content(text) {
             return Ok(text.to_string());
         }
-        let sys = match hint {
-            Some(h) if !h.trim().is_empty() => format!("{SYSTEM_POLISH}\n\n{h}"),
-            _ => SYSTEM_POLISH.to_string(),
-        };
+        let sys = build_system(SYSTEM_POLISH, hint, context);
         self.chat(&sys, text).await
     }
 
     pub async fn translate(&self, text: &str, target_lang: &str) -> Result<String> {
-        self.translate_with_hint(text, target_lang, None).await
+        self.translate_with_hint(text, target_lang, None, None).await
     }
 
-    /// Translate with an optional dictionary hint — same shape as
-    /// `polish_with_hint`. Appends the dictionary block to the translate
-    /// system prompt so proper nouns from the user's glossary are preserved
-    /// across the translation.
+    /// Translate with optional dictionary hint and app-context block — same
+    /// shape as `polish_with_hint`. Context tells the AI whether this is a
+    /// Slack DM or a legal email so it can pick register accordingly.
     pub async fn translate_with_hint(
         &self,
         text: &str,
         target_lang: &str,
         hint: Option<&str>,
+        context: Option<&str>,
     ) -> Result<String> {
         if !has_real_content(text) {
             return Ok(text.to_string());
         }
-        let mut sys = system_translate(target_lang);
-        if let Some(h) = hint {
-            if !h.trim().is_empty() {
-                sys.push_str("\n\n");
-                sys.push_str(h);
-            }
-        }
+        let base = system_translate(target_lang);
+        let sys = build_system(&base, hint, context);
         self.chat(&sys, text).await
     }
 

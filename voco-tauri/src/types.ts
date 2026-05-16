@@ -35,6 +35,8 @@ export interface Session {
   text: string;
   translate_target: string | null;
   duration_ms: number;
+  app_name?: string | null;
+  window_title?: string | null;
 }
 
 export interface VoCoStats {

@@ -11,6 +11,7 @@
 //! paste in the order the user spoke (matches the Python fix).
 
 use crate::ai::AiClient;
+use crate::app_context::AppContext;
 use crate::audio::RecordingSession;
 use crate::config::{ApiKeys, AppConfig};
 use crate::dictionary::Dictionary;
@@ -221,6 +222,15 @@ impl VoiceEngine {
 
         let _ = app.emit("hud:state", StatePayload { state: "processing" });
 
+        // Capture the foreground app right now — what the user was looking
+        // at when they released the hotkey. The HUD is click-through and the
+        // polling hotkey never steals focus, so this matches "where the
+        // pasted text will land". Win32 calls are sub-ms but cfg::spawn_blocking
+        // keeps us off the tokio worker just in case.
+        let context = tokio::task::spawn_blocking(AppContext::capture)
+            .await
+            .unwrap_or_default();
+
         // Run pipeline on a serialized task.
         let lock = self.processing_lock.clone();
         let app_for_task = app.clone();
@@ -228,7 +238,7 @@ impl VoiceEngine {
         let started = Instant::now();
         tokio::spawn(async move {
             let _guard = lock.lock().await;
-            match process_pipeline(wav_bytes, &mode, dry_run).await {
+            match process_pipeline(wav_bytes, &mode, dry_run, context.clone()).await {
                 Ok(outcome) => {
                     let (payload, warn_msg) = match outcome {
                         PipelineOutcome::Ok(p) => (p, None),
@@ -250,6 +260,8 @@ impl VoiceEngine {
                                 None
                             },
                             duration_ms: started.elapsed().as_millis() as u64,
+                            app_name: context.app_name.clone(),
+                            window_title: context.window_title.clone(),
                         };
                         let mut h = History::load();
                         h.push(session);
@@ -293,7 +305,9 @@ async fn process_pipeline(
     wav_bytes: Vec<u8>,
     mode: &str,
     dry_run: bool,
+    context: AppContext,
 ) -> Result<PipelineOutcome> {
+    let context_line = context.as_prompt_line();
     let cfg = AppConfig::load()?;
     let keys = ApiKeys::from_env();
 
@@ -361,7 +375,7 @@ async fn process_pipeline(
                 "DeepSeek 润色",
             ) {
                 Ok(client) => match client
-                    .polish_with_hint(&raw_text, hint.as_deref())
+                    .polish_with_hint(&raw_text, hint.as_deref(), context_line.as_deref())
                     .await
                 {
                     Ok(t) if !t.trim().is_empty() => t,
@@ -399,7 +413,12 @@ async fn process_pipeline(
                 label,
             ) {
                 Ok(client) => match client
-                    .translate_with_hint(&raw_text, &cfg.translate_target, hint.as_deref())
+                    .translate_with_hint(
+                        &raw_text,
+                        &cfg.translate_target,
+                        hint.as_deref(),
+                        context_line.as_deref(),
+                    )
                     .await
                 {
                     Ok(t) if !t.trim().is_empty() => t,

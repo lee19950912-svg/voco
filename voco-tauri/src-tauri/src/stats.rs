@@ -26,6 +26,14 @@ pub struct Session {
     pub text: String,
     pub translate_target: Option<String>,
     pub duration_ms: u64,
+    /// Foreground app at the moment of release. `None` for old records or
+    /// when capture failed (e.g. no foreground window).
+    #[serde(default)]
+    pub app_name: Option<String>,
+    /// Foreground window title at the moment of release. Browsers usually
+    /// pack the page title here.
+    #[serde(default)]
+    pub window_title: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
