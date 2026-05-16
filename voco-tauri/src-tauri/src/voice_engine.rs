@@ -323,11 +323,13 @@ async fn process_pipeline(
         Ok(t) => t,
         Err(e) if !asr_hotwords.is_empty() && {
             let s = e.to_string();
-            // Volcengine protocol-level errors contain "code=" (e.g. 1010
-            // invalid params, 1013 no speech, etc.). JSON parse trouble
-            // would indicate a schema mismatch on their side. Either is a
-            // signal that the unknown corpus field may be the culprit.
-            s.contains("code=") || s.contains("解析响应 JSON")
+            // Retry on protocol-level errors that *could* be a schema
+            // rejection. Excluded:
+            //   - code=1013 "no valid speeches" — legitimate empty audio,
+            //     retrying just doubles the user's wait for the same answer.
+            // Included: any other "code=" or JSON parse trouble.
+            !s.contains("code=1013")
+                && (s.contains("code=") || s.contains("解析响应 JSON"))
         } =>
         {
             tracing::warn!(
