@@ -45,6 +45,13 @@ pub struct AppConfig {
     /// 0.0–1.0. Multiplier applied to every cue. Default 0.7 keeps the cues
     /// audible without being startling on a quiet desk.
     pub sound_volume: f32,
+
+    /// Where the user is — drives engine routing.
+    /// "china"    → Volcengine ASR + DeepSeek polish/translate (国内直连, 中文最准)
+    /// "overseas" → OpenAI ASR + GPT polish/translate (海外可达, 多语强)
+    /// First-run default comes from system locale (zh-CN → china, else overseas).
+    /// User can flip in Settings or wizard at any time.
+    pub region: String,
 }
 
 impl Default for AppConfig {
@@ -68,6 +75,7 @@ impl Default for AppConfig {
             mute_others_while_recording: true,
             sound_enabled: true,
             sound_volume: 0.7,
+            region: "china".into(),
         }
     }
 }
@@ -114,6 +122,39 @@ impl AppConfig {
         std::fs::write(&path, text)?;
         Ok(())
     }
+
+    /// Rewrite every AI/ASR engine field to match `self.region`. Idempotent.
+    /// This is the single source of truth — the frontend never sets engine
+    /// internals directly, it only flips `region` and lets this method
+    /// cascade. Called from `save_config` so a region flip in Settings
+    /// instantly retargets everything.
+    pub fn apply_region(&mut self) {
+        match self.region.as_str() {
+            "overseas" => {
+                // OpenAI 全家套 via yunwu.ai relay. Same base URL for both
+                // chat and audio endpoints — yunwu is OpenAI-API-compatible.
+                let yunwu = "https://yunwu.ai/v1".to_string();
+                self.recognize_engine = "openai".into();
+                self.polish_engine = "openai".into();
+                self.polish_base_url = yunwu.clone();
+                self.polish_model = "gpt-4o-mini".into();
+                self.translate_engine = "openai".into();
+                self.translate_base_url = yunwu;
+                self.translate_model = "gpt-4o-mini".into();
+            }
+            _ => {
+                // Default: 国内引擎. Empty/unknown region falls here too so
+                // legacy configs (missing the field) keep working.
+                self.recognize_engine = "volcengine".into();
+                self.polish_engine = "deepseek".into();
+                self.polish_base_url = "https://api.deepseek.com".into();
+                self.polish_model = "deepseek-v4-flash".into();
+                self.translate_engine = "deepseek".into();
+                self.translate_base_url = "https://api.deepseek.com".into();
+                self.translate_model = "deepseek-v4-flash".into();
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +162,10 @@ pub struct ApiKeys {
     pub deepseek: String,
     pub openai: String,
     pub relay: String,
+    /// Single API key for the overseas relay (currently yunwu.ai). Used for
+    /// both ASR (/v1/audio/transcriptions) and chat (/v1/chat/completions)
+    /// when region is set to "overseas".
+    pub overseas: String,
     pub volc_app_id: String,
     pub volc_access_token: String,
     pub volc_cluster_zh: String,
@@ -134,6 +179,7 @@ impl ApiKeys {
             deepseek: std::env::var("DEEPSEEK_API_KEY").unwrap_or_default(),
             openai: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
             relay: std::env::var("RELAY_API_KEY").unwrap_or_default(),
+            overseas: std::env::var("OVERSEAS_API_KEY").unwrap_or_default(),
             volc_app_id: std::env::var("VOLC_APP_ID").unwrap_or_default(),
             volc_access_token: std::env::var("VOLC_ACCESS_TOKEN").unwrap_or_default(),
             volc_cluster_zh: std::env::var("VOLC_CLUSTER_ZH")

@@ -102,14 +102,34 @@ impl VoiceEngine {
         let cfg = AppConfig::load().unwrap_or_default();
         let device_name = cfg.input_device.clone();
 
+        // Show the HUD FIRST — this is what the user perceives as "the
+        // hotkey worked". The cpal mic open below blocks for 100-300ms
+        // (WASAPI cold start), and previously we did it before showing the
+        // HUD, so the user saw nothing for 100-300ms after pressing. The
+        // human reaction gap between "seeing HUD" and "starting to speak"
+        // is naturally 150-250ms, which fully covers mic-open latency —
+        // first syllables aren't lost.
+        let _ = app.emit("hud:state", StatePayload { state: "listening" });
+        let _ = show_hud(app);
+
         // RecordingSession::start is sync (spawns its own thread + blocks
         // until the cpal stream is ready). Run on spawn_blocking so we don't
         // freeze the tokio worker for 100~300ms.
         let device_name_owned = device_name.clone();
-        let rec = tokio::task::spawn_blocking(move || RecordingSession::start(&device_name_owned))
-            .await
-            .map_err(|e| anyhow!("启动录音任务出错: {e}"))?
-            .map_err(|e| anyhow!("打开麦克风失败: {e}"))?;
+        let rec = match tokio::task::spawn_blocking(move || RecordingSession::start(&device_name_owned)).await {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => {
+                // Mic open failed — undo the optimistic HUD show.
+                let _ = app.emit("hud:state", StatePayload { state: "hidden" });
+                let _ = hide_hud(app);
+                return Err(anyhow!("打开麦克风失败: {e}"));
+            }
+            Err(e) => {
+                let _ = app.emit("hud:state", StatePayload { state: "hidden" });
+                let _ = hide_hud(app);
+                return Err(anyhow!("启动录音任务出错: {e}"));
+            }
+        };
 
         // Re-check the slot before inserting — a parallel call could have
         // raced past the early-return above before we finished opening the
@@ -122,10 +142,6 @@ impl VoiceEngine {
         }
         *slot = Some(rec);
         drop(slot);
-
-        // HUD: show + listening state.
-        let _ = app.emit("hud:state", StatePayload { state: "listening" });
-        let _ = show_hud(app);
 
         // Pump audio levels to HUD at ~20 Hz.
         let recorder_arc = self.recorder.clone();
@@ -311,47 +327,65 @@ async fn process_pipeline(
     let cfg = AppConfig::load()?;
     let keys = ApiKeys::from_env();
 
-    // Pre-flight: missing core ASR keys is a hard error — don't bother recording further.
-    if keys.volc_app_id.is_empty() || keys.volc_access_token.is_empty() {
-        return Err(anyhow!(
-            "未配置火山引擎语音识别密钥，请在设置中填写后再试。"
-        ));
-    }
-
-    let volc = VolcConfig {
-        appid: keys.volc_app_id,
-        token: keys.volc_access_token,
-        cluster_zh: keys.volc_cluster_zh,
-        cluster_ko: keys.volc_cluster_ko,
-        language: cfg.recognize_language.clone(),
-    };
-    // Build ASR hot words from the user's dictionary — sent optimistically
-    // to v2/asr (Volcengine V3-style corpus block). If v2 strict-validates
-    // and rejects the unknown field, we'd kill all recognition for users
-    // with a non-empty dictionary. So: on a protocol-level error (response
-    // came back but with non-zero code, or JSON parse trouble) we retry
-    // ONCE without the corpus. Network/timeout failures are propagated as
-    // usual — retrying those just doubles the user's wait time.
-    let asr_hotwords = Dictionary::load().asr_hotwords();
-    let raw_text = match volc_recognize(&volc, &wav_bytes, &asr_hotwords).await {
-        Ok(t) => t,
-        Err(e) if !asr_hotwords.is_empty() && {
-            let s = e.to_string();
-            // Retry on protocol-level errors that *could* be a schema
-            // rejection. Excluded:
-            //   - code=1013 "no valid speeches" — legitimate empty audio,
-            //     retrying just doubles the user's wait for the same answer.
-            // Included: any other "code=" or JSON parse trouble.
-            !s.contains("code=1013")
-                && (s.contains("code=") || s.contains("解析响应 JSON"))
-        } =>
-        {
-            tracing::warn!(
-                "火山 ASR 带 corpus 失败（可能 v2 不接受热词字段），不带 corpus 重试一次：{e}"
-            );
-            volc_recognize(&volc, &wav_bytes, &[]).await?
+    // ASR step. Route between Volcengine (国内, 中文最准) and OpenAI
+    // (海外, 多语强) based on the user's region setting. Each branch is
+    // responsible for its own pre-flight key check.
+    let raw_text = if cfg.region == "overseas" {
+        if keys.overseas.is_empty() {
+            return Err(anyhow!(
+                "海外档需要 OVERSEAS_API_KEY，请在 .env 里设置后重启 VoCo。"
+            ));
         }
-        Err(e) => return Err(e),
+        let lang_hint = if cfg.recognize_language.is_empty() {
+            None
+        } else {
+            Some(cfg.recognize_language.as_str())
+        };
+        crate::openai_asr::recognize(
+            "https://yunwu.ai/v1",
+            &keys.overseas,
+            &wav_bytes,
+            lang_hint,
+        )
+        .await?
+    } else {
+        // 国内档：火山引擎
+        if keys.volc_app_id.is_empty() || keys.volc_access_token.is_empty() {
+            return Err(anyhow!(
+                "未配置火山引擎语音识别密钥，请在设置中填写后再试。"
+            ));
+        }
+        let volc = VolcConfig {
+            appid: keys.volc_app_id.clone(),
+            token: keys.volc_access_token.clone(),
+            cluster_zh: keys.volc_cluster_zh.clone(),
+            cluster_ko: keys.volc_cluster_ko.clone(),
+            language: cfg.recognize_language.clone(),
+        };
+        // Build ASR hot words from the user's dictionary — sent optimistically
+        // to v2/asr (Volcengine V3-style corpus block). If v2 strict-validates
+        // and rejects the unknown field, we'd kill all recognition for users
+        // with a non-empty dictionary. So: on a protocol-level error we retry
+        // ONCE without the corpus. (Hotwords don't apply to OpenAI ASR.)
+        let asr_hotwords = Dictionary::load().asr_hotwords();
+        match volc_recognize(&volc, &wav_bytes, &asr_hotwords).await {
+            Ok(t) => t,
+            Err(e) if !asr_hotwords.is_empty() && {
+                let s = e.to_string();
+                //   - code=1013 "no valid speeches" → legitimate empty audio,
+                //     retrying just doubles the user's wait for the same answer.
+                //   - Any other "code=" or JSON parse trouble → maybe schema rejection.
+                !s.contains("code=1013")
+                    && (s.contains("code=") || s.contains("解析响应 JSON"))
+            } =>
+            {
+                tracing::warn!(
+                    "火山 ASR 带 corpus 失败（可能 v2 不接受热词字段），不带 corpus 重试一次：{e}"
+                );
+                volc_recognize(&volc, &wav_bytes, &[]).await?
+            }
+            Err(e) => return Err(e),
+        }
     };
 
     // Empty recognition — most likely silence or background noise. Tell the
@@ -368,11 +402,19 @@ async fn process_pipeline(
         "raw" => raw_text.clone(),
         "polish" => {
             let hint = Dictionary::load().polish_hint();
+            // Region drives both the key picked and the label shown in
+            // error messages. Engine URLs/models were already pinned to
+            // the right service by apply_region() at save time.
+            let (api_key, label) = if cfg.region == "overseas" {
+                (&keys.overseas, "海外 AI 润色")
+            } else {
+                (&keys.deepseek, "DeepSeek 润色")
+            };
             match AiClient::new(
                 &cfg.polish_base_url,
-                &keys.deepseek,
+                api_key,
                 &cfg.polish_model,
-                "DeepSeek 润色",
+                label,
             ) {
                 Ok(client) => match client
                     .polish_with_hint(&raw_text, hint.as_deref(), context_line.as_deref())
@@ -397,10 +439,11 @@ async fn process_pipeline(
             }
         }
         "translate" => {
-            let (api_key, label) = match cfg.translate_engine.as_str() {
-                "deepseek" => (&keys.deepseek, "DeepSeek 翻译"),
-                "openai" => (&keys.openai, "OpenAI 翻译"),
-                _ => (&keys.relay, "中转站翻译"),
+            // Same region-driven key pick as polish above.
+            let (api_key, label) = if cfg.region == "overseas" {
+                (&keys.overseas, "海外 AI 翻译")
+            } else {
+                (&keys.deepseek, "DeepSeek 翻译")
             };
             // Dictionary also applies to translate: preserve proper nouns
             // through the translation step (e.g. "飞书" stays "飞书"/"Feishu"

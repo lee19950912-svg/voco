@@ -20,6 +20,7 @@ import {
   Search,
   Mic,
   Volume2,
+  Globe,
   Power,
   Info,
   Keyboard,
@@ -855,30 +856,30 @@ function SettingsPage({
     }
   }
 
-  // Switching translate engine needs to flip base_url + model + engine
-  // atomically — otherwise three save_config calls race and the polling
-  // thread reloads with mismatched fields. One write, all three fields.
-  function setTranslateEngine(engine: string) {
-    if (!cfg) return;
-    const presets: Record<string, { base_url: string; model: string }> = {
-      deepseek: { base_url: "https://api.deepseek.com", model: "deepseek-v4-flash" },
-      openai: { base_url: "https://api.openai.com/v1", model: "gpt-4.1-mini" },
-      relay: { base_url: "https://api.bltcy.ai/v1", model: "gpt-4.1-mini" },
-    };
-    const preset = presets[engine] ?? presets.deepseek;
-    const next: VoCoConfig = {
-      ...cfg,
-      translate_engine: engine,
-      translate_base_url: preset.base_url,
-      translate_model: preset.model,
-    };
-    setCfg(next);
-    invoke("save_config", { cfg: next }).catch(console.error);
-  }
-
   return (
     <div className="p-8 max-w-[1200px] mx-auto">
       <h1 className="text-[28px] font-semibold tracking-tight">设置</h1>
+
+      <Card title="地区" icon={<Globe size={16} strokeWidth={1.8} />}>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <RegionOption
+            label="中国大陆"
+            desc="国内引擎，中文最准，价格低"
+            selected={cfg.region !== "overseas"}
+            onSelect={() => update("region", "china")}
+          />
+          <RegionOption
+            label="海外"
+            desc="OpenAI 引擎，多语强，海外可达"
+            selected={cfg.region === "overseas"}
+            onSelect={() => update("region", "overseas")}
+          />
+        </div>
+        <p className="text-[11px] text-black/45 pt-3 pb-1">
+          切换后立即生效，下次录音就用对应的服务。海外档需要先在 .env 里设置
+          OVERSEAS_API_KEY。
+        </p>
+      </Card>
 
       <Card title="语音" icon={<Mic size={16} strokeWidth={1.8} />}>
         <Row label="使用的麦克风">
@@ -1094,17 +1095,6 @@ function SettingsPage({
             <option value="ja">日语</option>
           </select>
         </Row>
-        <Row label="翻译引擎">
-          <select
-            value={cfg.translate_engine}
-            onChange={(e) => setTranslateEngine(e.target.value)}
-            className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[300px]"
-          >
-            <option value="deepseek">DeepSeek V4-Flash（推荐，国内直连快）</option>
-            <option value="openai">OpenAI gpt-4.1-mini（韩语略优，延迟高）</option>
-            <option value="relay">中转站（OpenAI 备用线路）</option>
-          </select>
-        </Row>
       </Card>
 
     </div>
@@ -1173,6 +1163,39 @@ function SessionRow({ s }: { s: Session }) {
         <div className="text-xs text-black/35 mt-1">原文: {s.raw}</div>
       )}
     </div>
+  );
+}
+
+function RegionOption({
+  label,
+  desc,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  desc: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={
+        "text-left p-4 rounded-xl border transition-colors " +
+        (selected
+          ? "border-[#2563eb] bg-[#2563eb]/[0.04] ring-1 ring-[#2563eb]/30"
+          : "border-black/[0.08] hover:bg-black/[0.02]")
+      }
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[14px] font-medium text-black/85">{label}</span>
+        {selected && (
+          <span className="text-[11px] text-[#2563eb] font-medium">已选</span>
+        )}
+      </div>
+      <div className="text-[12px] text-black/55 mt-1">{desc}</div>
+    </button>
   );
 }
 

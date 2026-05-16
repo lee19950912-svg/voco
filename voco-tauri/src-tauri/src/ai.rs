@@ -19,7 +19,7 @@ use std::time::Duration;
 /// wraps an Arc so cloning it is cheap and shares the HTTP/2 connection pool
 /// + TLS session cache — reusing this saves the 100-300 ms TLS handshake on
 /// every polish / translate call after the first.
-static SHARED_HTTP: Lazy<reqwest::Client> = Lazy::new(|| {
+pub(crate) static SHARED_HTTP: Lazy<reqwest::Client> = Lazy::new(|| {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(45))
         .connect_timeout(Duration::from_secs(10))

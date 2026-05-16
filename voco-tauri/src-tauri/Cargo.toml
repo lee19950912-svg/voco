@@ -41,7 +41,7 @@ futures-util = "0.3"
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 
 # --- HTTP (DeepSeek/OpenAI) ---
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 
 # --- Audio I/O ---
 cpal = "0.15"

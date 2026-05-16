@@ -18,6 +18,7 @@ mod audio;
 mod audio_ducker;
 mod config;
 mod dictionary;
+mod openai_asr;
 #[cfg(windows)]
 mod history_crypt;
 #[cfg(windows)]
@@ -54,6 +55,12 @@ async fn save_config(
     cfg: AppConfig,
     #[cfg(windows)] hotkey: tauri::State<'_, HotkeyHandlesState>,
 ) -> Result<(), String> {
+    // apply_region rewrites every engine field from self.region so the
+    // frontend only ever needs to set the region toggle — engine internals
+    // (recognize_engine / polish_base_url / translate_model / etc.) all
+    // cascade from one switch.
+    let mut cfg = cfg;
+    cfg.apply_region();
     cfg.save().map_err(|e| e.to_string())?;
     // Tell the polling thread to pick up new hotkey / mode settings on its
     // next tick — avoids forcing the user to restart VoCo.
