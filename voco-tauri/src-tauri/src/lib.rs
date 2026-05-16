@@ -302,6 +302,19 @@ pub fn run() {
     let engine = Arc::new(VoiceEngine::new());
 
     tauri::Builder::default()
+        // Single-instance lock: if the user double-clicks the launcher again,
+        // don't spawn a second process — surface the existing main window
+        // instead. Without this, two processes would race for the right-Alt
+        // hotkey, both write to history.json, and the tray would duplicate.
+        // Must be registered first so the second instance exits before any
+        // other plugin initialises.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())

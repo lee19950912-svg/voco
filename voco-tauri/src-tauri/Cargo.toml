@@ -66,6 +66,7 @@ dotenvy = "0.15"
 tauri-plugin-autostart = "2.5.1"
 tracing-appender = "0.2.5"
 tauri-plugin-process = "2.3.1"
+tauri-plugin-single-instance = "2"
 
 # --- Windows-specific (clipboard paste via SendInput) ---
 [target.'cfg(windows)'.dependencies]
