@@ -3672,6 +3672,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rodio"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7ceb6607dd738c99bc8cb28eff249b7cd5c8ec88b9db96c0608c1480d140fb1"
+dependencies = [
+ "cpal",
+ "hound",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5560,7 +5570,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voco-tauri"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5573,6 +5583,7 @@ dependencies = [
  "hound",
  "once_cell",
  "reqwest 0.12.28",
+ "rodio",
  "serde",
  "serde_json",
  "serde_yaml",

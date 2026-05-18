@@ -26,6 +26,7 @@ mod kbd_layout;
 mod paste;
 #[cfg(windows)]
 mod polling_hotkey;
+mod sound;
 mod stats;
 mod voice_engine;
 mod volc_asr;
@@ -62,6 +63,9 @@ async fn save_config(
     let mut cfg = cfg;
     cfg.apply_region();
     cfg.save().map_err(|e| e.to_string())?;
+    // Push fresh sound prefs into the audio thread so volume / on-off
+    // changes take effect on the very next cue without an app restart.
+    sound::set_config(cfg.sound_enabled, cfg.sound_volume);
     // Tell the polling thread to pick up new hotkey / mode settings on its
     // next tick — avoids forcing the user to restart VoCo.
     #[cfg(windows)]
@@ -309,6 +313,14 @@ pub fn run() {
     }
 
     let engine = Arc::new(VoiceEngine::new());
+
+    // Spawn the native sound thread and seed it with the user's last-saved
+    // enabled/volume preferences. Audio output stays alive for the whole
+    // process; cues fire via lock-free atomics + an mpsc channel.
+    sound::init();
+    if let Ok(cfg) = AppConfig::load() {
+        sound::set_config(cfg.sound_enabled, cfg.sound_volume);
+    }
 
     tauri::Builder::default()
         // Single-instance lock: if the user double-clicks the launcher again,

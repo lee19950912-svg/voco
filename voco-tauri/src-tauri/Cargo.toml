@@ -1,6 +1,6 @@
 [package]
 name = "voco-tauri"
-version = "0.1.0"
+version = "0.1.2"
 description = "VoCo — voice-to-text input method, subscription-grade Windows desktop app"
 authors = ["VoCo"]
 edition = "2021"
@@ -46,6 +46,12 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # --- Audio I/O ---
 cpal = "0.15"
 hound = "3.5"  # WAV writer
+# Rodio for playing HUD cues from the Rust side. Doing it from the WebView2
+# AudioContext caused the start cue to clip — the window-show + JS event +
+# AudioContext-resume all racing meant the first few audio frames were
+# dropped. Native playback skips all of that. `default-features = false +
+# wav` strips symphonia so we keep the binary small (~200 KB add).
+rodio = { version = "0.20", default-features = false, features = ["wav"] }
 
 # --- Clipboard ---
 arboard = "3"

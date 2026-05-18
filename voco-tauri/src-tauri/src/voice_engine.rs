@@ -111,6 +111,10 @@ impl VoiceEngine {
         // first syllables aren't lost.
         let _ = app.emit("hud:state", StatePayload { state: "listening" });
         let _ = show_hud(app);
+        // Native start cue. Fired alongside the HUD show so the user gets
+        // the "we heard the hotkey" feedback without any WebView2 audio
+        // startup lag — see sound.rs for the why.
+        crate::sound::play_start();
 
         // RecordingSession::start is sync (spawns its own thread + blocks
         // until the cpal stream is ready). Run on spawn_blocking so we don't
@@ -284,6 +288,10 @@ impl VoiceEngine {
                         let _ = h.save();
                     }
                     let _ = app_for_task.emit("voco:result", payload);
+                    // Success cue. Plays only when a real result was
+                    // produced; cancellations (HUD closes with no result)
+                    // stay silent, matching prior behavior.
+                    crate::sound::play_success();
                     if let Some(msg) = warn_msg {
                         let _ = app_for_task.emit("voco:error", ErrorPayload { message: msg });
                     }

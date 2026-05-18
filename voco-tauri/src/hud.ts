@@ -1,8 +1,11 @@
 // HUD entry — listens for Tauri events from the Rust backend and drives the
 // pill animation. Mirrors hud_demo.html exactly (5 bars, 30 FPS, ease per
 // frame so motion looks like a CSS transition).
+//
+// Audio cues used to live here but were moved to the Rust backend (sound.rs)
+// because WebView2's AudioContext racing the window-show clipped the first
+// frames of the start cue. This file is now visual-only.
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 window.addEventListener("keydown", (e) => {
@@ -87,115 +90,11 @@ function processing() {
   void PROC_EASE; // reserved for future use
 }
 
-// --- Audio cues ---------------------------------------------------------
-// Two WAV cues shipped from /public/sounds/. Decoded once at startup so
-// playback is gap-free. Volume + on/off are read from voco.toml on startup
-// and refreshed whenever the settings page emits "voco:sound_config".
-// Mirrors Speakly / Typeless — they both ship only start + end cues. More
-// cues per session feels noisy in practice.
-type CueName = "start" | "success";
-
-const CUE_FILES: Record<CueName, string> = {
-  start: "/sounds/voco_record_start.wav",
-  success: "/sounds/voco_success.wav",
-};
-
-let audioCtx: AudioContext | null = null;
-const buffers: Partial<Record<CueName, AudioBuffer>> = {};
-let soundEnabled = true;
-let soundVolume = 0.7;
-
-async function loadCue(name: CueName, url: string) {
-  try {
-    if (!audioCtx) audioCtx = new AudioContext();
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const arr = await res.arrayBuffer();
-    buffers[name] = await audioCtx.decodeAudioData(arr);
-  } catch {
-    // Missing or malformed file: leave the slot empty. play() no-ops.
-  }
-}
-
-function preloadCues() {
-  for (const [name, url] of Object.entries(CUE_FILES)) {
-    void loadCue(name as CueName, url);
-  }
-}
-
-function play(name: CueName) {
-  if (!soundEnabled) return;
-  const buf = buffers[name];
-  if (!buf || !audioCtx) return;
-  const ctx = audioCtx;
-  const start = () => {
-    try {
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const gain = ctx.createGain();
-      gain.gain.value = soundVolume;
-      src.connect(gain).connect(ctx.destination);
-      src.start();
-    } catch {
-      // Source creation failed — silent failure is fine, HUD visual is
-      // primary feedback.
-    }
-  };
-  // WebView2 keeps the AudioContext "suspended" until the user has gestured
-  // inside the HUD window — which never happens because the HUD is a
-  // click-through overlay. Calling start() while suspended schedules the
-  // source at currentTime=0, and once resume() finally lands the playhead
-  // jumps past the start time so the cue is silently dropped. So we wait
-  // for resume to land before scheduling. Subsequent cues find the context
-  // already "running" and play with no delay.
-  if (ctx.state === "suspended") {
-    ctx.resume().then(start).catch(() => {});
-  } else {
-    start();
-  }
-}
-
-// Pull current sound config from the backend on startup, then keep it in
-// sync via an event the settings page emits whenever the user toggles or
-// drags the volume slider.
-interface SoundConfig {
-  sound_enabled?: boolean;
-  sound_volume?: number;
-}
-function applySoundConfig(cfg: SoundConfig) {
-  if (typeof cfg.sound_enabled === "boolean") soundEnabled = cfg.sound_enabled;
-  if (typeof cfg.sound_volume === "number") {
-    soundVolume = Math.max(0, Math.min(1, cfg.sound_volume));
-  }
-}
-invoke<SoundConfig>("get_config")
-  .then(applySoundConfig)
-  .catch(() => {});
-listen<SoundConfig>("voco:sound_config", (e) => applySoundConfig(e.payload)).catch(() => {});
-
-// Closing cue: the "success" sound plays on any processing→hidden close
-// (matches Speakly's behavior — they don't distinguish success from error
-// in audio; the visual HUD/error toast carries that information).
-let closingCueArmed = false;
-listen("voco:result", () => {
-  closingCueArmed = true;
-}).catch(() => {});
-
-preloadCues();
-
 function applyState(next: State) {
   if (state === next) return;
-  const prev = state;
   stopTimer();
   state = next;
   if (next === "hidden") {
-    // Play "success" only when the session actually produced a result.
-    // Cancels (listening→hidden with no result event) stay silent — no
-    // text was pasted, so the user doesn't need a "done" sound.
-    if (closingCueArmed) {
-      play("success");
-      closingCueArmed = false;
-    }
     hud.classList.remove("show");
     return;
   }
@@ -208,9 +107,6 @@ function applyState(next: State) {
       listenTargets[i] = REST_HEIGHT;
       listenHeights[i] = REST_HEIGHT;
     }
-    // Fresh open — clear any leftover arming flag from a prior session.
-    closingCueArmed = false;
-    if (prev === "hidden") play("start");
   }
   hud.classList.add("show");
   timer = window.setInterval(() => {
