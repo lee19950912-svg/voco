@@ -1,0 +1,257 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Vercel-inspired design tokens (per DESIGN.md / npx getdesign add vercel)
+   - ink / canvas duet
+   - 4 px spacing base
+   - aggressive negative tracking for display
+   --------------------------------------------------------------- */
+:root {
+  --ink: #171717;
+  --body: #4d4d4d;
+  --mute: #888888;
+  --hairline: #ebebeb;
+  --hairline-strong: #a1a1a1;
+  --canvas: #ffffff;
+  --canvas-soft: #fafafa;
+  --canvas-soft-2: #f5f5f5;
+  --link: #0070f3;
+
+  /* Brand mesh gradient stops (used only at hero scale) */
+  --grad-1: #007cf0;
+  --grad-2: #00dfd8;
+  --grad-3: #7928ca;
+  --grad-4: #ff0080;
+  --grad-5: #f9cb28;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-mute: var(--mute);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-canvas: var(--canvas);
+  --color-canvas-soft: var(--canvas-soft);
+  --color-canvas-soft-2: var(--canvas-soft-2);
+  --color-link: var(--link);
+
+  /* Font system per brand spec:
+     - Latin display / brand     → Satoshi, fall back to Geist Sans
+     - CJK display + body        → Noto Sans SC
+     - UI buttons                → Geist Sans 600
+     - Tech eyebrows + mono      → Geist Mono 600
+     Browsers per-glyph-fallback within a stack, so Latin chars in a heading
+     pull from Satoshi/Geist while CJK chars pull from Noto Sans SC. */
+  --font-display: "Satoshi", var(--font-geist-sans), var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-body: var(--font-noto-sans-sc), "Satoshi", var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-ui: var(--font-geist-sans), "Satoshi", var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+/* Display: all marketing headings use the Satoshi/Geist→NotoSansSC stack
+   at weight 700. Letter-spacing stays per-element (set inline in
+   components) because the optical sizing differs at 28px vs 56px. */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* Buttons: Geist Sans at 600. Tailwind's `font-medium` / `font-semibold`
+   utilities on <button> elements get overridden here so the spec applies
+   without touching every component. */
+button {
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+/* Mono eyebrows / tech labels: Geist Mono at 600. */
+.font-mono {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* Brand mark in nav + footer. Tight tracking matches the wordmark feel. */
+.voco-brand {
+  font-family: "Satoshi", var(--font-geist-sans), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: var(--ink);
+  color: #f2f2f2;
+}
+
+/* Card chrome — the brand uses stacked subtle shadows + an inset hairline
+   ring rather than a single heavy drop. */
+.card-elev-2 {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 1px 1px rgba(0, 0, 0, 0.02),
+    0 2px 2px rgba(0, 0, 0, 0.04);
+}
+.card-elev-3 {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    0 8px 8px -8px rgba(0, 0, 0, 0.04);
+}
+.card-elev-4 {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    0 8px 16px -4px rgba(0, 0, 0, 0.04);
+}
+
+/* The brand mesh gradient — applied as the hero atmospheric backdrop. */
+.mesh-bg {
+  background:
+    radial-gradient(at 18% 22%, rgba(0, 124, 240, 0.22) 0%, transparent 45%),
+    radial-gradient(at 78% 18%, rgba(255, 0, 128, 0.18) 0%, transparent 40%),
+    radial-gradient(at 60% 70%, rgba(0, 223, 216, 0.20) 0%, transparent 45%),
+    radial-gradient(at 30% 85%, rgba(121, 40, 202, 0.14) 0%, transparent 45%),
+    radial-gradient(at 90% 80%, rgba(249, 203, 40, 0.10) 0%, transparent 45%);
+}
+
+/* HUD-pill blinker for the hero visual. */
+@keyframes voco-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(1); }
+}
+.voco-bar {
+  animation: voco-bar 1.1s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Subtle drift on the hero mesh — moves the warm spots a few % over a long
+   loop. Keeps the page feeling alive without being a "look at me" effect. */
+@keyframes mesh-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-2%, 1%, 0) scale(1.04); }
+}
+.mesh-bg-animated {
+  background:
+    radial-gradient(at 18% 22%, rgba(0, 124, 240, 0.22) 0%, transparent 45%),
+    radial-gradient(at 78% 18%, rgba(255, 0, 128, 0.18) 0%, transparent 40%),
+    radial-gradient(at 60% 70%, rgba(0, 223, 216, 0.20) 0%, transparent 45%),
+    radial-gradient(at 30% 85%, rgba(121, 40, 202, 0.14) 0%, transparent 45%),
+    radial-gradient(at 90% 80%, rgba(249, 203, 40, 0.10) 0%, transparent 45%);
+  animation: mesh-drift 14s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Continuous horizontal scroll for the "anywhere you write" app-name strip.
+   Tracks are duplicated in the markup; the -50% shift seamlessly loops
+   because the second half is an exact copy of the first half. */
+@keyframes marquee-x {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee-x 40s linear infinite;
+  width: max-content;
+}
+
+/* Progress-bar fill cycle for the speech-vs-typing race. Keyboard fills
+   slowly (~24 s), speech fills fast (~6 s); both reset together so the
+   "speech finished while keyboard is still ~25 %" moment is visible. */
+@keyframes fill-speech {
+  0%   { width: 0%; }
+  18%  { width: 96%; }
+  22%  { width: 100%; }
+  100% { width: 100%; }
+}
+@keyframes fill-keyboard {
+  0%   { width: 0%; }
+  100% { width: 100%; }
+}
+.fill-speech {
+  animation: fill-speech 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.fill-keyboard {
+  animation: fill-keyboard 24s linear infinite;
+}
+
+/* Number-ticker pop. Used on the big "4×" badge in SpeedCompare. */
+@keyframes pop-in {
+  0%   { transform: scale(0.92); opacity: 0; }
+  60%  { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop-in {
+  animation: pop-in 0.6s ease-out both;
+}
+
+/* Shimmer used while a demo "polishes" — a thin bright bar swiping across
+   a placeholder pill. */
+@keyframes shimmer {
+  0%   { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 0%,
+    rgba(0, 0, 0, 0.10) 50%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Soft fade-in used by the cycling Live Demo when a new line lands. */
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+/* Live status dot — gentle pulse to imply "we're listening". */
+@keyframes live-dot {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.3); opacity: 1; }
+}
+.live-dot {
+  animation: live-dot 1.4s ease-in-out infinite;
+}
+
+/* Fades the left + right edges of a marquee row so chips dissolve into the
+   page background rather than getting clipped hard. */
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Font-candidate utility classes — drive the /fonts demo page.       */
+/* Each class swaps font-family wholesale so the same content can be   */
+/* compared one-to-one across candidates.                              */
+/* ------------------------------------------------------------------ */
+.font-cand-current {
+  font-family: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+}
+.font-cand-inter-noto {
+  font-family: var(--font-inter), var(--font-noto-sans-sc), "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+.font-cand-harmony {
+  font-family: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+.font-cand-alibaba {
+  font-family: "AlibabaPuHuiTi-3-65-Medium", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}

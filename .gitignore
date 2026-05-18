@@ -31,3 +31,8 @@ dist/
 # OS junk
 Thumbs.db
 .DS_Store
+
+# Playwright screenshots from local browser testing
+.playwright-mcp/
+hero.png
+voco-hero.png
