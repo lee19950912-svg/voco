@@ -247,6 +247,11 @@ pub fn run() {
             // to the exe — check there too for the personal-use build where
             // .env is shipped inside the installer.
             candidates.push(parent.join("resources").join(".env"));
+            // Older personal builds used array-form `resources: ["../.env"]`,
+            // which Tauri's NSIS bundler encoded as `_up_/.env` (the `_up_`
+            // segment is its escape for a leading `..`). Keep this fallback
+            // so already-installed copies keep working without a reinstall.
+            candidates.push(parent.join("_up_").join(".env"));
         }
     }
     for rel in [".env", "../.env", "../../.env"] {

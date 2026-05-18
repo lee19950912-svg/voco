@@ -48,7 +48,7 @@
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],
-    "resources": ["../.env"],
+    "resources": { "../.env": ".env" },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
