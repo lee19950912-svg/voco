@@ -213,7 +213,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         {page === "home" && (
           <HomePage
             cfg={cfg}

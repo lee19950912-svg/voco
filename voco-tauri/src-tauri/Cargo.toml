@@ -1,6 +1,6 @@
 [package]
 name = "voco-tauri"
-version = "0.1.2"
+version = "0.1.3"
 description = "VoCo — voice-to-text input method, subscription-grade Windows desktop app"
 authors = ["VoCo"]
 edition = "2021"
