@@ -66,14 +66,14 @@ html, body {
   font-weight: 400;
 }
 
-/* Display headings — Speakly-style typography:
-   at 60-96 px the weight comes from sheer size, not from boldness, so the
-   default is 400 and individual headings can opt up to 700 where impact
-   matters. Letter-spacing stays per-element (set inline in components)
-   because the optical sizing differs at 20 px vs 60 px vs 96 px. */
+/* Display headings — bold + tight tracking, Apple-style.
+   700 carries the weight; tracking pulls letters together at large sizes
+   so the headline reads as a single shape rather than separate glyphs.
+   Per-element overrides on font-weight are still allowed for callouts. */
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 /* Buttons: Geist Sans at 600. Tailwind's `font-medium` / `font-semibold`
@@ -123,14 +123,17 @@ button {
     0 8px 16px -4px rgba(0, 0, 0, 0.04);
 }
 
-/* The brand mesh gradient — applied as the hero atmospheric backdrop. */
+/* Hero backdrop — soft pastel mist on white. The previous mesh used five
+   saturated radials (blue/magenta/cyan/purple/yellow) and read as a
+   rainbow; this version drops to three low-saturation tints (sky / pink /
+   mint) over a white wash so the page feels "almost white" with hints of
+   color, like Apple / Linear / Vercel hero plates. */
 .mesh-bg {
   background:
-    radial-gradient(at 18% 22%, rgba(0, 124, 240, 0.22) 0%, transparent 45%),
-    radial-gradient(at 78% 18%, rgba(255, 0, 128, 0.18) 0%, transparent 40%),
-    radial-gradient(at 60% 70%, rgba(0, 223, 216, 0.20) 0%, transparent 45%),
-    radial-gradient(at 30% 85%, rgba(121, 40, 202, 0.14) 0%, transparent 45%),
-    radial-gradient(at 90% 80%, rgba(249, 203, 40, 0.10) 0%, transparent 45%);
+    radial-gradient(at 18% 24%, rgba(180, 215, 255, 0.55) 0%, transparent 55%),
+    radial-gradient(at 82% 22%, rgba(255, 215, 232, 0.50) 0%, transparent 55%),
+    radial-gradient(at 65% 80%, rgba(205, 240, 232, 0.45) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.85) 100%);
 }
 
 /* HUD-pill blinker for the hero visual. */
@@ -151,12 +154,11 @@ button {
 }
 .mesh-bg-animated {
   background:
-    radial-gradient(at 18% 22%, rgba(0, 124, 240, 0.22) 0%, transparent 45%),
-    radial-gradient(at 78% 18%, rgba(255, 0, 128, 0.18) 0%, transparent 40%),
-    radial-gradient(at 60% 70%, rgba(0, 223, 216, 0.20) 0%, transparent 45%),
-    radial-gradient(at 30% 85%, rgba(121, 40, 202, 0.14) 0%, transparent 45%),
-    radial-gradient(at 90% 80%, rgba(249, 203, 40, 0.10) 0%, transparent 45%);
-  animation: mesh-drift 14s ease-in-out infinite;
+    radial-gradient(at 18% 24%, rgba(180, 215, 255, 0.55) 0%, transparent 55%),
+    radial-gradient(at 82% 22%, rgba(255, 215, 232, 0.50) 0%, transparent 55%),
+    radial-gradient(at 65% 80%, rgba(205, 240, 232, 0.45) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.85) 100%);
+  animation: mesh-drift 28s ease-in-out infinite;
   will-change: transform;
 }
 
@@ -170,6 +172,22 @@ button {
 .marquee-track {
   animation: marquee-x 40s linear infinite;
   width: max-content;
+}
+@keyframes marquee-x-rev {
+  0%   { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+.marquee-track-rev {
+  animation: marquee-x-rev 40s linear infinite;
+  width: max-content;
+}
+
+/* When the wrapping container is hovered, pause every marquee row inside.
+   Used so visitors can hover the icon area and read the brand names without
+   the row sliding away mid-read. */
+.marquee-pause-on-hover:hover .marquee-track,
+.marquee-pause-on-hover:hover .marquee-track-rev {
+  animation-play-state: paused;
 }
 
 /* Progress-bar fill cycle for the speech-vs-typing race. Keyboard fills
@@ -269,6 +287,40 @@ button {
 .live-dot {
   animation: live-dot 1.4s ease-in-out infinite;
 }
+
+/* HUD pill breathing — slow scale loop so the black recording capsule
+   feels alive even when not actively visualizing audio. Used on the
+   LiveDemo card. */
+@keyframes hud-breath {
+  0%, 100% { transform: scale(1); box-shadow: 0 8px 24px -6px rgba(0,0,0,0.25); }
+  50%      { transform: scale(1.025); box-shadow: 0 12px 30px -6px rgba(0,0,0,0.30); }
+}
+.hud-breath {
+  animation: hud-breath 2.6s ease-in-out infinite;
+}
+
+/* Soft float — the LiveDemo card drifts up/down a few px on a long loop. */
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+.float-soft {
+  animation: float-soft 7s ease-in-out infinite;
+}
+
+/* Hero entrance — title pops up 8px while fading in. Single-shot on mount
+   (`both` keeps the end state). Applied via a className, not scroll-based. */
+@keyframes hero-in {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.hero-in {
+  animation: hero-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.hero-in-delay-1 { animation-delay: 0.10s; }
+.hero-in-delay-2 { animation-delay: 0.22s; }
+.hero-in-delay-3 { animation-delay: 0.34s; }
+.hero-in-delay-4 { animation-delay: 0.46s; }
 
 /* Fades the left + right edges of a marquee row so chips dissolve into the
    page background rather than getting clipped hard. */

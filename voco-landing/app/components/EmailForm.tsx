@@ -117,7 +117,7 @@ export default function EmailForm({
             if (status === "error") setStatus("idle");
           }}
           aria-invalid={isError}
-          className={`w-full h-12 px-4 rounded-full border bg-canvas text-[15px] text-ink placeholder:text-mute outline-none transition focus:border-ink ${
+          className={`w-full h-12 px-5 rounded-full border bg-canvas text-[15px] text-ink placeholder:text-mute outline-none transition focus:border-[#0070f3] focus:shadow-[0_0_0_4px_rgba(0,112,243,0.12)] ${
             isError ? "border-[#ee0000]" : "border-hairline"
           }`}
         />
@@ -125,7 +125,7 @@ export default function EmailForm({
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="h-12 px-6 rounded-full bg-ink text-white text-[15px] font-semibold hover:opacity-90 active:opacity-80 transition disabled:opacity-60 whitespace-nowrap"
+        className="h-12 px-6 rounded-full bg-ink text-white text-[15px] font-semibold hover:bg-[#1a1a1a] hover:-translate-y-px hover:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.25)] active:translate-y-0 transition disabled:opacity-60 whitespace-nowrap"
       >
         {status === "submitting" ? "提交中…" : buttonLabel}
       </button>
