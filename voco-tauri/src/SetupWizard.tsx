@@ -110,8 +110,12 @@ export function SetupWizard({
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-white">
-      <div className="w-[680px] p-12 rounded-2xl border border-black/[0.05] shadow-sm">
+    // min-h-screen (vs h-screen) lets the page grow when content overflows
+    // — important when both Korean-IME and IME-switch warning banners are
+    // showing on step 4, plus the shortcut config below. With h-screen the
+    // overflow used to clip silently.
+    <div className="min-h-screen flex items-center justify-center bg-white py-8">
+      <div className="w-[680px] p-10 rounded-2xl border border-black/[0.05] shadow-sm">
         <Steps step={step} total={TOTAL_STEPS} labels={STEP_LABELS} />
 
         {step === 1 && (
