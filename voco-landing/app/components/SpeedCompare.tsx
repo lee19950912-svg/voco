@@ -44,7 +44,7 @@ export default function SpeedCompare() {
           <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
             Speed
           </div>
-          <h2 className="mt-4 text-[36px] sm:text-[44px] leading-[1.1] tracking-[-0.03em] text-ink">
+          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             说一段话的时间，<br />
             键盘只打到 1/4。
           </h2>

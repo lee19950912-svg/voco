@@ -73,11 +73,11 @@ function Hero() {
               内测中 · Windows 10 / 11
             </div>
 
-            <h1 className="mt-7 text-[44px] sm:text-[56px] leading-[1.05] tracking-[-0.04em] text-ink">
+            <h1 className="mt-7 text-[56px] sm:text-[88px] font-normal leading-[1.02] tracking-[-0.02em] text-ink">
               说出来，<br />写下去。
             </h1>
 
-            <p className="mt-6 max-w-[520px] text-[17px] leading-[1.6] text-body">
+            <p className="mt-7 max-w-[520px] text-[19px] leading-[1.55] text-body">
               按住右 Alt 说话，松开瞬间文字到光标。
               <span className="text-ink" style={{ fontWeight: 500 }}>为中文母语者重新设计。</span>
             </p>
@@ -133,7 +133,7 @@ function FeatureTriple() {
               <div className="font-mono text-[11px] tracking-wider text-mute">
                 {it.eyebrow}
               </div>
-              <div className="text-[20px] tracking-tight text-ink">
+              <div className="text-[20px] font-bold tracking-tight text-ink">
                 {it.title}
               </div>
               <div className="text-[14.5px] leading-[1.65] text-body">
@@ -159,7 +159,7 @@ function FeatureOneKey() {
             <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
               One key. Anywhere.
             </div>
-            <h2 className="mt-4 text-[36px] sm:text-[44px] leading-[1.1] tracking-[-0.03em] text-ink">
+            <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
               一个键。<br />任何软件。
             </h2>
             <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[520px]">
@@ -264,7 +264,7 @@ function FeatureContext() {
           <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
             Context-aware polish
           </div>
-          <h2 className="mt-4 text-[36px] sm:text-[44px] leading-[1.1] tracking-[-0.03em] text-ink">
+          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             懂你在哪、<br />懂你在说什么。
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body">
@@ -313,7 +313,7 @@ function DarkBand() {
         <div className="font-mono text-[12px] tracking-wider text-white/50 uppercase">
           Principles
         </div>
-        <h2 className="mt-4 text-[36px] sm:text-[52px] leading-[1.1] tracking-[-0.03em] max-w-[820px]">
+        <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] max-w-[820px]">
           让你忘了在用一个软件，<br />只剩下"说话即写字"。
         </h2>
         <div className="mt-14 grid sm:grid-cols-3 gap-10 max-w-[1000px]">
@@ -344,7 +344,7 @@ function Principle({ n, title, body }: { n: string; title: string; body: string 
       <div className="font-mono text-[11px] tracking-wider text-white/40">
         {n}
       </div>
-      <div className="mt-3 text-[20px] tracking-tight">
+      <div className="mt-3 text-[20px] font-bold tracking-tight">
         {title}
       </div>
       <div className="mt-2 text-[14.5px] leading-[1.65] text-white/65">
@@ -364,7 +364,7 @@ function FaqSection() {
         <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
           FAQ
         </div>
-        <h2 className="mt-4 text-[36px] sm:text-[44px] leading-[1.1] tracking-[-0.03em] text-ink">
+        <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.0] tracking-[-0.02em] text-ink">
           常见问题。
         </h2>
         <div className="mt-12">
@@ -386,7 +386,7 @@ function CtaBand() {
         <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
           准备好了？
         </div>
-        <h2 className="mt-4 text-[36px] sm:text-[44px] leading-[1.1] tracking-[-0.03em] text-ink">
+        <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.05] tracking-[-0.02em] text-ink">
           让说话回到写字。
         </h2>
         <p className="mt-4 text-[16px] text-body max-w-[520px] mx-auto">

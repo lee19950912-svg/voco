@@ -7,9 +7,13 @@
    - aggressive negative tracking for display
    --------------------------------------------------------------- */
 :root {
-  --ink: #171717;
-  --body: #4d4d4d;
-  --mute: #888888;
+  /* Three-tier neutral ramp learned from speakly.ai:
+     pure black for titles, mid gray for body, light gray for caption — the
+     contrast steps carry hierarchy on their own so we can drop bold weights
+     on display copy and let size do the work. */
+  --ink: #0a0a0a;
+  --body: #6b7280;
+  --mute: #9ca3af;
   --hairline: #ebebeb;
   --hairline-strong: #a1a1a1;
   --canvas: #ffffff;
@@ -62,12 +66,14 @@ html, body {
   font-weight: 400;
 }
 
-/* Display: all marketing headings use the Satoshi/Geist→NotoSansSC stack
-   at weight 700. Letter-spacing stays per-element (set inline in
-   components) because the optical sizing differs at 28px vs 56px. */
+/* Display headings — Speakly-style typography:
+   at 60-96 px the weight comes from sheer size, not from boldness, so the
+   default is 400 and individual headings can opt up to 700 where impact
+   matters. Letter-spacing stays per-element (set inline in components)
+   because the optical sizing differs at 20 px vs 60 px vs 96 px. */
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 /* Buttons: Geist Sans at 600. Tailwind's `font-medium` / `font-semibold`
