@@ -13,6 +13,7 @@ export default function Home() {
         <Hero />
         <FeatureTriple />
         <SpeedCompare />
+        <FeatureAutoList />
         <FeatureContext />
         <FeatureTranslate />
         <AppsAnywhere />
@@ -139,6 +140,60 @@ function FeatureTriple() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Feature block: auto-list (messy speech -> clean numbered list)      */
+/* ------------------------------------------------------------------ */
+function FeatureAutoList() {
+  return (
+    <section className="bg-canvas-soft border-y border-hairline">
+      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
+        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-16 items-center">
+          <div>
+            <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
+              Auto list
+            </div>
+            <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+              讲三件事<br />自动出三行
+            </h2>
+            <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[520px]">
+              说「先 A 再 B 最后 C」或者「第一第二第三」，VoCo 自动整理成编号清单——粘到光标位置直接是结构化的笔记。
+            </p>
+            <ul className="mt-7 space-y-2 text-[14.5px] text-body">
+              <li className="flex gap-2"><span className="text-mute">·</span>检测「先 / 再 / 然后 / 最后」「第一 / 第二 / 第三」等口语连接词</li>
+              <li className="flex gap-2"><span className="text-mute">·</span>3 件以上独立事项才编号，日常聊天不会被误判</li>
+              <li className="flex gap-2"><span className="text-mute">·</span>代码编辑器场景自动关闭，保持单行</li>
+            </ul>
+          </div>
+
+          <div className="relative">
+            <div className="rounded-[16px] bg-canvas border border-hairline p-7 card-elev-3">
+              <div className="font-mono text-[11px] tracking-wider text-mute mb-3">
+                你说的
+              </div>
+              <p className="text-[15px] leading-[1.7] text-body italic">
+                "嗯今天有三个事要搞啊，先把那个 bug 修一下，然后开个会同步一下进度，对了，最后还要写个周报发给老板"
+              </p>
+              <div className="my-6 flex items-center gap-3 text-mute">
+                <div className="flex-1 border-t border-hairline" />
+                <span className="font-mono text-[10px] tracking-wider uppercase">VoCo</span>
+                <div className="flex-1 border-t border-hairline" />
+              </div>
+              <div className="font-mono text-[11px] tracking-wider text-mute mb-3">
+                出在光标位置
+              </div>
+              <ol className="space-y-2 text-[15.5px] leading-[1.55] text-ink">
+                <li><span className="font-mono text-mute mr-2">1.</span>把那个 bug 修一下</li>
+                <li><span className="font-mono text-mute mr-2">2.</span>开个会同步一下进度</li>
+                <li><span className="font-mono text-mute mr-2">3.</span>写个周报发给老板</li>
+              </ol>
+            </div>
+          </div>
         </div>
       </div>
     </section>
