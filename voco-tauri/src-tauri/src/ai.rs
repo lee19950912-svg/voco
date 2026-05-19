@@ -92,11 +92,6 @@ fn lang_name(code: &str) -> &str {
         "en" => "英语",
         "zh" => "中文",
         "ja" => "日语",
-        "yue" => "粤语",
-        "ru" => "俄语",
-        "fr" => "法语",
-        "de" => "德语",
-        "es" => "西班牙语",
         other => other,
     }
 }
