@@ -17,6 +17,7 @@ export default function Home() {
         <FeatureContext />
         <FeatureTranslate />
         <AppsAnywhere />
+        <FeaturePrivacy />
         <FaqSection />
         <CtaBand />
       </main>
@@ -77,8 +78,9 @@ function Hero() {
             </h1>
 
             <p className="mt-7 max-w-[520px] text-[19px] leading-[1.55] text-body">
-              按住右 Alt 说话，松开瞬间文字到光标。
-              <span className="text-ink" style={{ fontWeight: 500 }}>为中文母语者重新设计。</span>
+              按住一个键说话，松开瞬间文字到光标。
+              AI 顺手帮你去口水话、修标点、整理分点。
+              <span className="text-ink" style={{ fontWeight: 500 }}>中文母语者用得最顺。</span>
             </p>
 
             <div className="mt-9" id="beta">
@@ -105,18 +107,18 @@ function FeatureTriple() {
   const items = [
     {
       eyebrow: "01",
-      title: "中文专项",
-      body: "短句、口语、夹英文术语都能准识别，标点自动补。",
+      title: "去口水话 · 修标点",
+      body: "「嗯/啊/那个/就是」自动删，标点不用想，AI 补好。",
     },
     {
       eyebrow: "02",
-      title: "懂场景",
-      body: "代码编辑器极简、聊天口语、邮件书面——AI 看应用自动切风格。",
+      title: "自动分点",
+      body: "说「先 A 再 B 最后 C」自动出 1./2./3. 清单，结构化笔记一句话搞定。",
     },
     {
       eyebrow: "03",
-      title: "本地优先",
-      body: "录音用完即丢，历史只在你电脑里，不上传。",
+      title: "按场景调风格",
+      body: "代码极简、聊天口语、邮件书面——同一句话在不同软件里出来不一样。",
     },
   ];
 
@@ -263,6 +265,59 @@ function FeatureContext() {
               </div>
               <div className="text-[14px] leading-[1.6] text-ink">{c.out}</div>
               <div className="text-[12px] text-mute">{c.note}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Feature block: privacy                                              */
+/* ------------------------------------------------------------------ */
+function FeaturePrivacy() {
+  const items = [
+    {
+      title: "不经过我们",
+      body: "录音和文字直接发给你选的引擎（火山 / DeepSeek / OpenAI），不绕道 VoCo 自己的服务器——我们想存档都存不到。",
+    },
+    {
+      title: "引擎承诺不训练",
+      body: "火山、DeepSeek、OpenAI 的 API 协议都明确：客户数据不会用于模型训练。VoCo 默认走 API，不走有训练义务的免费方案。",
+    },
+    {
+      title: "历史在本地",
+      body: "词典、识别记录、配置全是你电脑里的文件，要删一键删。换电脑也是你自己拷过去。",
+    },
+  ];
+  return (
+    <section className="bg-canvas-soft border-y border-hairline">
+      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
+        <div className="max-w-[720px]">
+          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
+            Privacy
+          </div>
+          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+            你的声音<br />不外传
+          </h2>
+          <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[560px]">
+            VoCo 是直连工具，不开自己的中转服务，也不会偷偷收集。你说的话只在三个地方走过：你的麦克风、你选的引擎、你的剪贴板。
+          </p>
+        </div>
+
+        <div className="mt-12 grid sm:grid-cols-3 gap-px bg-hairline rounded-[12px] overflow-hidden border border-hairline">
+          {items.map((it, i) => (
+            <div key={it.title} className="bg-canvas p-7 flex flex-col gap-3">
+              <div className="font-mono text-[11px] tracking-wider text-mute">
+                {String(i + 1).padStart(2, "0")}
+              </div>
+              <div className="text-[20px] font-bold tracking-tight text-ink">
+                {it.title}
+              </div>
+              <div className="text-[14.5px] leading-[1.65] text-body">
+                {it.body}
+              </div>
             </div>
           ))}
         </div>
