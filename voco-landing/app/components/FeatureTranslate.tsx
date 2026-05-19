@@ -4,6 +4,8 @@
 //
 // Hard-coded translations because the page is static; the actual product
 // chooses the target language from the user's settings.
+import Reveal from "./Reveal";
+
 const cases: { lang: string; flag: string; out: string }[] = [
   {
     lang: "English",
@@ -54,19 +56,20 @@ export default function FeatureTranslate() {
             </div>
           </div>
 
-          {cases.map((c) => (
-            <div
-              key={c.lang}
-              className="rounded-[12px] bg-canvas border border-hairline p-5 card-elev-2 flex flex-col gap-3 transition hover:-translate-y-0.5"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-ink">{c.lang}</span>
-                <span className="font-mono text-[10px] uppercase tracking-wider text-mute">
-                  {c.flag}
-                </span>
+          {cases.map((c, idx) => (
+            <Reveal key={c.lang} delay={idx * 140}>
+              <div className="rounded-[12px] bg-canvas border border-hairline p-5 card-elev-2 flex flex-col gap-3 h-full transition hover:-translate-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[15px] font-medium text-ink">
+                    {c.lang}
+                  </span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-mute">
+                    {c.flag}
+                  </span>
+                </div>
+                <div className="text-[14px] leading-[1.65] text-ink">{c.out}</div>
               </div>
-              <div className="text-[14px] leading-[1.65] text-ink">{c.out}</div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
