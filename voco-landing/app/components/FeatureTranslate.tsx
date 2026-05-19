@@ -31,8 +31,8 @@ export default function FeatureTranslate() {
             Translate
           </div>
           <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
-            说中文，<br />
-            直接出外语。
+            说中文<br />
+            直接出外语
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[640px]">
             按住右 Alt + 右 Shift 说中文，翻译完直接粘贴。聊国际客户、回英文邮件都用得上。

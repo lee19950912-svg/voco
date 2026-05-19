@@ -72,7 +72,7 @@ function Hero() {
             </div>
 
             <h1 className="mt-7 text-[56px] sm:text-[88px] font-normal leading-[1.02] tracking-[-0.02em] text-ink">
-              说出来，<br />写下去。
+              说出来<br />写下去
             </h1>
 
             <p className="mt-7 max-w-[520px] text-[19px] leading-[1.55] text-body">
@@ -178,7 +178,7 @@ function FeatureContext() {
             Context-aware polish
           </div>
           <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
-            懂你在哪、<br />懂你在说什么。
+            懂你在哪<br />懂你在说什么
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body">
             VoCo 看你当前在哪个软件，自动调输出风格。同一句话，在代码编辑器、聊天、邮件里出来完全不一样。
@@ -227,7 +227,7 @@ function FaqSection() {
           FAQ
         </div>
         <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.0] tracking-[-0.02em] text-ink">
-          常见问题。
+          常见问题
         </h2>
         <div className="mt-12">
           <Faq />
@@ -249,7 +249,7 @@ function CtaBand() {
           准备好了？
         </div>
         <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.05] tracking-[-0.02em] text-ink">
-          让说话回到写字。
+          让说话回到写字
         </h2>
         <p className="mt-4 text-[16px] text-body max-w-[520px] mx-auto">
           留个邮箱，正式版上线时第一时间告诉你。
