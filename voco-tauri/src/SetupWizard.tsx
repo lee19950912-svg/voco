@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { FileText, Sparkles, Globe, Mic, AlertTriangle } from "lucide-react";
 import type { VoCoConfig } from "./types";
+import { TRANSLATION_TARGETS } from "./types";
 
 const TOTAL_STEPS = 5;
 const STEP_LABELS = ["欢迎", "地区", "麦克风", "快捷键", "完成"];
@@ -354,10 +355,11 @@ export function SetupWizard({
                   onChange={(e) => update("translate_target", e.target.value)}
                   className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[160px] text-sm bg-white"
                 >
-                  <option value="ko">韩语</option>
-                  <option value="en">英语</option>
-                  <option value="zh">中文</option>
-                  <option value="ja">日语</option>
+                  {TRANSLATION_TARGETS.map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

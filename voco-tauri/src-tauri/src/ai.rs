@@ -87,11 +87,25 @@ const SYSTEM_POLISH: &str = "你是语音转写润色工具。\n\
 - 任何情况下都不要在输出里出现单独的反引号 ` 或代码围栏（三个反引号）";
 
 fn lang_name(code: &str) -> &str {
+    // Order matches src/types.ts::TRANSLATION_TARGETS — keep them in sync.
     match code {
-        "ko" => "韩语",
-        "en" => "英语",
         "zh" => "中文",
+        "en" => "英语",
         "ja" => "日语",
+        "ko" => "韩语",
+        "fr" => "法语",
+        "de" => "德语",
+        "es" => "西班牙语",
+        "ru" => "俄语",
+        "pt" => "葡萄牙语",
+        "it" => "意大利语",
+        "th" => "泰语",
+        "vi" => "越南语",
+        "ar" => "阿拉伯语",
+        "hi" => "印地语",
+        "tr" => "土耳其语",
+        "id" => "印尼语",
+        "ms" => "马来语",
         other => other,
     }
 }

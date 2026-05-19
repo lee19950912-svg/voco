@@ -37,6 +37,7 @@ import type {
   Session,
   DictEntry,
 } from "./types";
+import { TRANSLATION_TARGETS, TRANSLATION_TARGET_LABEL } from "./types";
 import "./App.css";
 
 type Page = "home" | "history" | "dictionary" | "settings";
@@ -242,12 +243,7 @@ function App() {
   );
 }
 
-const TARGET_LANG_LABEL: Record<string, string> = {
-  ko: "韩语",
-  en: "英语",
-  zh: "中文",
-  ja: "日语",
-};
+const TARGET_LANG_LABEL = TRANSLATION_TARGET_LABEL;
 
 function HomePage({
   cfg,
@@ -1110,10 +1106,11 @@ function SettingsPage({
             onChange={(e) => update("translate_target", e.target.value)}
             className="border border-black/[0.08] rounded-lg px-3 py-2 min-w-[220px]"
           >
-            <option value="ko">韩语</option>
-            <option value="en">英语</option>
-            <option value="zh">中文</option>
-            <option value="ja">日语</option>
+            {TRANSLATION_TARGETS.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.label}
+              </option>
+            ))}
           </select>
         </Row>
       </Card>

@@ -59,3 +59,31 @@ export interface DictEntry {
   term: string;
   note: string;
 }
+
+// Languages exposed in the translation-target dropdown (settings page + setup
+// wizard). Keep ISO codes — they flow through to the Rust side
+// (ai.rs::lang_name) and into prompt strings. Order matches how a Chinese
+// user typically picks targets: native, neighbors, business EU, frontier
+// trade markets.
+export const TRANSLATION_TARGETS: { code: string; label: string }[] = [
+  { code: "zh", label: "中文" },
+  { code: "en", label: "英语" },
+  { code: "ja", label: "日语" },
+  { code: "ko", label: "韩语" },
+  { code: "fr", label: "法语" },
+  { code: "de", label: "德语" },
+  { code: "es", label: "西班牙语" },
+  { code: "ru", label: "俄语" },
+  { code: "pt", label: "葡萄牙语" },
+  { code: "it", label: "意大利语" },
+  { code: "th", label: "泰语" },
+  { code: "vi", label: "越南语" },
+  { code: "ar", label: "阿拉伯语" },
+  { code: "hi", label: "印地语" },
+  { code: "tr", label: "土耳其语" },
+  { code: "id", label: "印尼语" },
+  { code: "ms", label: "马来语" },
+];
+
+export const TRANSLATION_TARGET_LABEL: Record<string, string> =
+  Object.fromEntries(TRANSLATION_TARGETS.map((t) => [t.code, t.label]));
