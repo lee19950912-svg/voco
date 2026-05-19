@@ -13,7 +13,6 @@ export default function Home() {
       <Nav />
       <main className="flex-1">
         <Hero />
-        <FeatureTriple />
         <SpeedCompare />
         <FeatureAutoList />
         <FeatureContext />
@@ -102,52 +101,6 @@ function Hero() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* 3-up feature row                                                    */
-/* ------------------------------------------------------------------ */
-function FeatureTriple() {
-  const items = [
-    {
-      eyebrow: "01",
-      title: "去口水话 · 修标点",
-      body: "「嗯/啊/那个/就是」自动删，标点不用想，AI 补好。",
-    },
-    {
-      eyebrow: "02",
-      title: "自动分点",
-      body: "说「先 A 再 B 最后 C」自动出 1./2./3. 清单，结构化笔记一句话搞定。",
-    },
-    {
-      eyebrow: "03",
-      title: "按场景调风格",
-      body: "代码极简、聊天口语、邮件书面——同一句话在不同软件里出来不一样。",
-    },
-  ];
-
-  return (
-    <section className="border-t border-hairline">
-      <div className="mx-auto max-w-[1200px] px-6 py-20 sm:py-24">
-        <div className="grid sm:grid-cols-3 gap-px bg-hairline rounded-[12px] overflow-hidden border border-hairline">
-          {items.map((it, idx) => (
-            <Reveal key={it.title} delay={idx * 120}>
-              <div className="bg-canvas p-7 flex flex-col gap-3 h-full transition hover:bg-canvas-soft">
-                <div className="font-mono text-[11px] tracking-wider text-mute">
-                  {it.eyebrow}
-                </div>
-                <div className="text-[20px] font-bold tracking-tight text-ink">
-                  {it.title}
-                </div>
-                <div className="text-[14.5px] leading-[1.65] text-body">
-                  {it.body}
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Feature block: context-aware                                        */
@@ -178,14 +131,11 @@ function FeatureContext() {
     <section className="border-b border-hairline">
       <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[720px]">
-          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-            Context-aware polish
-          </div>
-          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+          <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             懂你在哪<br />懂你在说什么
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body">
-            VoCo 看你当前在哪个软件，自动调输出风格。同一句话，在代码编辑器、聊天、邮件里出来完全不一样。
+            看你在哪个软件，自动调输出风格。
           </p>
         </div>
 
@@ -227,30 +177,27 @@ function FeatureContext() {
 function FeaturePrivacy() {
   const items = [
     {
-      title: "不经过我们",
-      body: "录音和文字直接发给你选的引擎（火山 / DeepSeek / OpenAI），不绕道 VoCo 自己的服务器——我们想存档都存不到。",
+      title: "零云保留",
+      body: "录音识别完即丢，VoCo 不在自己服务器存任何东西。",
     },
     {
-      title: "引擎承诺不训练",
-      body: "火山、DeepSeek、OpenAI 的 API 协议都明确：客户数据不会用于模型训练。VoCo 默认走 API，不走有训练义务的免费方案。",
+      title: "不用于训练",
+      body: "你的语音和文字不会被任何人拿去训练模型。",
     },
     {
-      title: "历史在本地",
-      body: "词典、识别记录、配置全是你电脑里的文件，要删一键删。换电脑也是你自己拷过去。",
+      title: "历史只在本机",
+      body: "词典、记录、配置全是你电脑里的文件，要删一键删。",
     },
   ];
   return (
     <section className="bg-canvas-soft border-y border-hairline">
       <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[720px]">
-          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-            Privacy
-          </div>
-          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
-            你的声音<br />不外传
+          <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+            隐私<br />优先
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[560px]">
-            VoCo 是直连工具，不开自己的中转服务，也不会偷偷收集。你说的话只在三个地方走过：你的麦克风、你选的引擎、你的剪贴板。
+            你说的话只走麦克风 → 引擎 → 剪贴板。
           </p>
         </div>
 
@@ -283,10 +230,7 @@ function FaqSection() {
   return (
     <section id="faq" className="border-b border-hairline">
       <div className="mx-auto max-w-[860px] px-6 py-24 sm:py-32">
-        <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-          FAQ
-        </div>
-        <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.0] tracking-[-0.02em] text-ink">
+        <h2 className="text-[44px] sm:text-[60px] font-bold leading-[1.0] tracking-[-0.02em] text-ink">
           常见问题
         </h2>
         <div className="mt-12">

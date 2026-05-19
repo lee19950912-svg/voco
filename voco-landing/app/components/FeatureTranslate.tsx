@@ -54,15 +54,12 @@ export default function FeatureTranslate() {
     <section className="bg-canvas-soft border-y border-hairline">
       <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[720px]">
-          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-            Translate
-          </div>
-          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+          <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             说中文<br />
             直接出外语
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[640px]">
-            按住右 Alt + 右 Ctrl 说中文，翻译完直接粘贴。聊国际客户、回英文邮件都用得上。
+            按住右 Alt + 右 Ctrl 说中文，翻译完直接粘贴。
           </p>
         </div>
 

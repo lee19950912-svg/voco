@@ -86,21 +86,13 @@ export default function FeatureAutoList() {
       <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="grid lg:grid-cols-[1fr_1.1fr] gap-16 items-center">
           <div>
-            <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-              Auto list
-            </div>
-            <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+            <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
               讲三件事<br />自动出三行
             </h2>
             <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[520px]">
-              说「先 A 再 B 最后 C」或者「第一第二第三」，VoCo
-              自动整理成编号清单——粘到光标位置直接是结构化的笔记。
+              说「先 A 再 B 最后 C」，自动整理成 1./2./3. 编号清单。
             </p>
             <ul className="mt-7 space-y-2 text-[14.5px] text-body">
-              <li className="flex gap-2">
-                <span className="text-mute">·</span>
-                检测「先 / 再 / 然后 / 最后」「第一 / 第二 / 第三」等口语连接词
-              </li>
               <li className="flex gap-2">
                 <span className="text-mute">·</span>
                 3 件以上独立事项才编号，日常聊天不会被误判

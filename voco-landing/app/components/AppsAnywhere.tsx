@@ -47,15 +47,12 @@ export default function AppsAnywhere() {
     <section className="border-b border-hairline">
       <div className="mx-auto max-w-[1200px] px-6 pt-24 sm:pt-28 pb-6">
         <div className="max-w-[720px]">
-          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-            Anywhere
-          </div>
-          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+          <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             在你写字的<br />
             任何地方都能用
           </h2>
           <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[560px]">
-            不挑应用、不需要切输入法。任何接受键盘输入的地方，按一下快捷键就能说话。
+            不挑应用、不切输入法。
           </p>
         </div>
       </div>

@@ -41,10 +41,7 @@ export default function SpeedCompare() {
     <section className="border-y border-hairline bg-canvas-soft">
       <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[720px]">
-          <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-            Speed
-          </div>
-          <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+          <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             说一段话的时间<br />
             键盘只打到 1/4
           </h2>
@@ -93,8 +90,8 @@ function KeyboardMock({
         </div>
       </div>
       <div className="px-7 py-3 border-t border-hairline flex items-center justify-between">
-        <span className="text-[11px] font-mono text-mute uppercase tracking-wider">
-          Keyboard
+        <span className="text-[11px] font-mono text-mute tracking-wider">
+          键盘
         </span>
         <span className="text-[11px] font-mono text-mute">
           约 50 字 / 分钟
@@ -152,8 +149,8 @@ function VoiceMock({
       </div>
 
       <div className="px-7 py-3 border-t border-hairline flex items-center justify-between">
-        <span className="text-[11px] font-mono text-[#0070f3] uppercase tracking-wider">
-          Voice · VoCo
+        <span className="text-[11px] font-mono text-[#0070f3] tracking-wider">
+          语音 · VoCo
         </span>
         <span className="text-[11px] font-mono text-mute">
           约 200 字 / 分钟
