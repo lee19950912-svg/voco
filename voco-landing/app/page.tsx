@@ -12,12 +12,10 @@ export default function Home() {
       <main className="flex-1">
         <Hero />
         <FeatureTriple />
-        <FeatureOneKey />
         <SpeedCompare />
         <FeatureContext />
         <FeatureTranslate />
         <AppsAnywhere />
-        <DarkBand />
         <FaqSection />
         <CtaBand />
       </main>
@@ -148,91 +146,6 @@ function FeatureTriple() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Feature block: one key, any app                                     */
-/* ------------------------------------------------------------------ */
-function FeatureOneKey() {
-  return (
-    <section className="bg-canvas-soft border-y border-hairline">
-      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
-        <div className="grid lg:grid-cols-[1fr_1.1fr] gap-16 items-center">
-          <div>
-            <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-              One key. Anywhere.
-            </div>
-            <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
-              一个键。<br />任何软件。
-            </h2>
-            <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[520px]">
-              按住右 Alt 说话，松开瞬间文字到光标。
-              不挑应用、不切输入法——发消息、写代码、回邮件一个键搞定。
-            </p>
-            <ul className="mt-8 space-y-3 text-[15px] text-ink">
-              <KeyValueRow label="录音方式" value="按住说，松开止" />
-              <KeyValueRow label="出字方式" value="自动粘贴到当前光标" />
-              <KeyValueRow label="冷启动" value="< 200 ms" />
-              <KeyValueRow label="安装包" value="约 20 MB · 单 exe" />
-            </ul>
-          </div>
-
-          <div className="relative">
-            <div className="rounded-[16px] bg-canvas border border-hairline p-8 card-elev-3 transition hover:shadow-[0_12px_24px_-8px_rgba(0,0,0,0.10),0_2px_2px_rgba(0,0,0,0.04)]">
-              <div className="font-mono text-[11px] tracking-wider text-mute mb-4">
-                EXAMPLE
-              </div>
-              <div className="space-y-5">
-                <SayLine
-                  raw="嗯那个、帮我把这个 PR 改成 draft 状态吧 啊不对 changed back 就行"
-                  out="帮我把这个 PR 改成 draft 状态。改回 changed back 就行。"
-                />
-                <div className="border-t border-hairline" />
-                <SayLine
-                  raw="哥们儿明天三点能见一面吗 那个 关于上次说的那个事"
-                  out="哥们儿，明天三点能见一面吗？关于上次说的那个事。"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function KeyValueRow({ label, value }: { label: string; value: string }) {
-  return (
-    <li className="flex items-center justify-between border-b border-hairline pb-3">
-      <span className="text-[13px] font-mono tracking-wide text-mute uppercase">
-        {label}
-      </span>
-      <span className="text-[15px] text-ink">{value}</span>
-    </li>
-  );
-}
-
-function SayLine({ raw, out }: { raw: string; out: string }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-start gap-2">
-        <span className="font-mono text-[10px] mt-1 text-mute uppercase tracking-wider shrink-0">
-          说
-        </span>
-        <span className="text-[14px] leading-relaxed text-body italic">
-          {raw}
-        </span>
-      </div>
-      <div className="flex items-start gap-2">
-        <span className="font-mono text-[10px] mt-1 text-ink uppercase tracking-wider shrink-0">
-          出
-        </span>
-        <span className="text-[14.5px] leading-relaxed text-ink font-medium">
-          {out}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Feature block: context-aware                                        */
 /* ------------------------------------------------------------------ */
 function FeatureContext() {
@@ -300,57 +213,6 @@ function FeatureContext() {
         </div>
       </div>
     </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Dark band — philosophy                                              */
-/* ------------------------------------------------------------------ */
-function DarkBand() {
-  return (
-    <section className="bg-ink text-white">
-      <div className="mx-auto max-w-[1200px] px-6 py-28 sm:py-36">
-        <div className="font-mono text-[12px] tracking-wider text-white/50 uppercase">
-          Principles
-        </div>
-        <h2 className="mt-4 text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] max-w-[820px]">
-          让你忘了在用一个软件，<br />只剩下"说话即写字"。
-        </h2>
-        <div className="mt-14 grid sm:grid-cols-3 gap-10 max-w-[1000px]">
-          <Principle
-            n="01"
-            title="不打扰"
-            body="只在你按下快捷键时工作。不监听、不截屏、不预录。"
-          />
-          <Principle
-            n="02"
-            title="不锁死"
-            body="API Key 可以填你自己的，词典在本地，历史在本地，要换软件随时换。"
-          />
-          <Principle
-            n="03"
-            title="不端着"
-            body="收到反馈就改。bug 自己用得上的也会先修，再轮到别人。"
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Principle({ n, title, body }: { n: string; title: string; body: string }) {
-  return (
-    <div>
-      <div className="font-mono text-[11px] tracking-wider text-white/40">
-        {n}
-      </div>
-      <div className="mt-3 text-[20px] font-bold tracking-tight">
-        {title}
-      </div>
-      <div className="mt-2 text-[14.5px] leading-[1.65] text-white/65">
-        {body}
-      </div>
-    </div>
   );
 }
 
