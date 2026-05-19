@@ -42,18 +42,8 @@ export default function SpeedCompare() {
     frame > RESET_AT ? "reset" : frame < VOICE_LISTEN_END ? "listening" : "done";
 
   return (
-    <section className="relative border-y border-hairline bg-[#F7F8FA] overflow-hidden">
-      {/* Subtle blue glow plate behind everything */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at 70% 30%, rgba(37,99,235,0.06) 0%, transparent 55%)",
-        }}
-      />
-
-      <div className="relative mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
+    <section className="border-y border-hairline bg-[#F7F8FA]">
+      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[820px]">
           <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             你说完一段话<br />

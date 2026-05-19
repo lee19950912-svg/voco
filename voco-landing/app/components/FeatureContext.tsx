@@ -10,21 +10,36 @@ const BRAND = "#2563EB";
 
 const RAW = "fix 一下那个 auth bug 哈，把多余的 token check 删了";
 
-const cases: { app: string; tag: string; out: string; note: string }[] = [
+type AppCase = {
+  app: string;
+  iconSlug: string;
+  iconColor: string;
+  tag: string;
+  out: string;
+  note: string;
+};
+
+const cases: AppCase[] = [
   {
     app: "Cursor",
+    iconSlug: "cursor",
+    iconColor: "000000",
     tag: "代码编辑器",
     out: "fix auth bug，把多余 token check 删了",
     note: "极简风，删口水词，中英混排原样",
   },
   {
     app: "微信",
+    iconSlug: "wechat",
+    iconColor: "07C160",
     tag: "聊天",
     out: "fix 一下 auth bug 哈，把多余 token check 删了",
     note: "口语化，保留「哈」等语气词",
   },
   {
-    app: "Outlook",
+    app: "Gmail",
+    iconSlug: "gmail",
+    iconColor: "EA4335",
     tag: "邮件",
     out: "请修复 auth bug，并删除多余的 token check。",
     note: "书面语，严谨标点，技术词保留英文",
@@ -100,18 +115,9 @@ export default function FeatureContext() {
   return (
     <section
       ref={sectionRef}
-      className="relative bg-[#F7F8FA] border-b border-[#E5E7EB] overflow-hidden"
+      className="bg-[#F7F8FA] border-b border-[#E5E7EB]"
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at 70% 70%, rgba(37,99,235,0.05) 0%, transparent 55%)",
-        }}
-      />
-
-      <div className="relative mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
+      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[820px]">
           <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             在哪说话<br />
@@ -168,7 +174,7 @@ export default function FeatureContext() {
               {detected ? "已识别当前窗口" : "正在识别窗口…"}
             </span>
             <span className="text-[12px] text-mute font-mono">
-              Cursor · 微信 · Outlook
+              Cursor · 微信 · Gmail
             </span>
           </div>
         </div>
@@ -198,12 +204,24 @@ export default function FeatureContext() {
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span
-                    className="text-[16px] font-semibold"
-                    style={{ color: BRAND }}
-                  >
-                    {c.app}
-                  </span>
+                  <div className="flex items-center gap-2.5">
+                    {/* Brand icon — simple-icons SVG tinted with the
+                        product's brand color. Sharp at 22px because SVG. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://api.iconify.design/simple-icons:${c.iconSlug}.svg?color=%23${c.iconColor}`}
+                      alt=""
+                      width={22}
+                      height={22}
+                      className="shrink-0"
+                    />
+                    <span
+                      className="text-[16px] font-semibold"
+                      style={{ color: BRAND }}
+                    >
+                      {c.app}
+                    </span>
+                  </div>
                   <span className="text-[11px] font-mono text-mute uppercase tracking-wider">
                     {c.tag}
                   </span>

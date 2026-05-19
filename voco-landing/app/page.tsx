@@ -52,7 +52,7 @@ function Nav() {
             href="#beta"
             className="inline-flex h-9 px-4 items-center text-[13px] font-semibold text-white bg-ink rounded-full hover:opacity-90 hover:-translate-y-px transition"
           >
-            申请内测
+            加入内测
           </a>
         </div>
       </div>
@@ -70,21 +70,16 @@ function Hero() {
       <div className="relative mx-auto max-w-[1200px] px-6 pt-24 pb-28 sm:pt-28 sm:pb-32">
         <div className="grid lg:grid-cols-[1.2fr_1fr] gap-16 items-center">
           <div>
-            <div className="hero-in inline-flex items-center gap-2 px-3 h-7 rounded-full bg-canvas-soft border border-hairline text-[12px] font-mono text-body">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0070f3] live-dot" />
-              内测中 · Windows 10 / 11
-            </div>
-
-            <h1 className="hero-in hero-in-delay-1 mt-7 text-[56px] sm:text-[88px] leading-[0.98] tracking-[-0.02em] text-ink">
+            <h1 className="hero-in text-[56px] sm:text-[88px] leading-[0.98] tracking-[-0.02em] text-ink">
               别打字了<br />直接说
             </h1>
 
-            <p className="hero-in hero-in-delay-2 mt-7 max-w-[560px] text-[19px] leading-[1.55] text-body font-normal">
-              <span className="text-ink" style={{ fontWeight: 500 }}>VoCo</span>{" "}
+            <p className="hero-in hero-in-delay-1 mt-7 max-w-[560px] text-[19px] leading-[1.55] text-body font-normal">
+              <span style={{ color: "#2563EB", fontWeight: 600 }}>VoCo</span>{" "}
               把你的语音变成可直接发送的文字。自动去口水话、修标点、润色表达，还能一键翻译。
             </p>
 
-            <div className="hero-in hero-in-delay-3 mt-9" id="beta">
+            <div className="hero-in hero-in-delay-2 mt-9" id="beta">
               <EmailForm />
               <p className="mt-3 text-[12px] text-mute">
                 内测期免费 · 仅用来通知发布 · 不会打扰你
@@ -109,11 +104,17 @@ function Hero() {
 /* ------------------------------------------------------------------ */
 function FaqSection() {
   return (
-    <section id="faq" className="border-b border-hairline">
+    <section
+      id="faq"
+      className="border-b border-hairline scroll-mt-20"
+    >
       <div className="mx-auto max-w-[860px] px-6 py-24 sm:py-32">
-        <h2 className="text-[44px] sm:text-[60px] font-bold leading-[1.0] tracking-[-0.02em] text-ink">
-          常见问题
+        <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
+          你可能<br />还想知道
         </h2>
+        <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[640px]">
+          关于识别、隐私、兼容性，这里一次说明白。
+        </p>
         <div className="mt-12">
           <Faq />
         </div>
@@ -128,19 +129,26 @@ function FaqSection() {
 function CtaBand() {
   return (
     <section className="relative overflow-hidden border-b border-hairline">
-      <div className="absolute inset-0 mesh-bg-animated pointer-events-none opacity-80" />
-      <div className="relative mx-auto max-w-[1200px] px-6 py-24 sm:py-32 text-center">
-        <div className="font-mono text-[12px] tracking-wider text-mute uppercase">
-          准备好了？
-        </div>
-        <h2 className="mt-4 text-[44px] sm:text-[60px] font-bold leading-[1.05] tracking-[-0.02em] text-ink">
-          让说话回到写字
+      <div className="absolute inset-0 mesh-bg-animated pointer-events-none opacity-50" />
+      <div className="relative mx-auto max-w-[1200px] px-6 py-20 sm:py-24 text-center">
+        <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.025em] text-ink">
+          用说话<br />代替打字
         </h2>
-        <p className="mt-4 text-[16px] text-body max-w-[520px] mx-auto">
-          留个邮箱，正式版上线时第一时间告诉你。
+        <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[560px] mx-auto">
+          留下邮箱，抢先体验 VoCo。正式版上线后第一时间通知你。
         </p>
-        <div className="mt-8 flex justify-center">
-          <EmailForm />
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <EmailForm buttonLabel="加入内测名单" />
+          <p className="text-[12px] text-mute">
+            只用于内测通知，不会发送垃圾邮件
+          </p>
+        </div>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] font-mono text-mute tracking-wider">
+          <span>Windows 优先</span>
+          <span className="text-hairline">·</span>
+          <span>全局快捷键</span>
+          <span className="text-hairline">·</span>
+          <span>AI 润色 / 翻译</span>
         </div>
       </div>
     </section>
@@ -152,8 +160,8 @@ function CtaBand() {
 /* ------------------------------------------------------------------ */
 function Footer() {
   return (
-    <footer className="bg-canvas">
-      <div className="mx-auto max-w-[1200px] px-6 py-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-[13px] text-body">
+    <footer className="bg-canvas border-t border-hairline">
+      <div className="mx-auto max-w-[1200px] px-6 py-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-[13px] text-body">
         <div className="flex items-center gap-3">
           <span className="grid place-items-center w-6 h-6 rounded-md bg-ink text-white text-[11px] font-semibold">
             V
@@ -161,8 +169,11 @@ function Footer() {
           <span className="voco-brand text-ink">VoCo</span>
           <span className="text-mute">· Made for Windows · Voice + Compose</span>
         </div>
-        <div className="font-mono text-[12px] text-mute">
-          © 2026 VoCo
+        <div className="flex items-center gap-5">
+          <a href="mailto:hi@voco.app" className="hover:text-ink transition">
+            Contact
+          </a>
+          <span className="font-mono text-[12px] text-mute">© 2026 VoCo</span>
         </div>
       </div>
     </footer>

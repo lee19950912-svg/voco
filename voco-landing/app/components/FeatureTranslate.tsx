@@ -133,18 +133,9 @@ export default function FeatureTranslate() {
   return (
     <section
       ref={sectionRef}
-      className="relative bg-[#F7F8FA] border-y border-[#E5E7EB] overflow-hidden"
+      className="bg-[#F7F8FA] border-y border-[#E5E7EB]"
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at 30% 30%, rgba(37,99,235,0.05) 0%, transparent 55%)",
-        }}
-      />
-
-      <div className="relative mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
+      <div className="mx-auto max-w-[1200px] px-6 py-24 sm:py-32">
         <div className="max-w-[820px]">
           <h2 className="text-[44px] sm:text-[60px] font-normal leading-[1.05] tracking-[-0.02em] text-ink">
             说中文<br />

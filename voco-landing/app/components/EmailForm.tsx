@@ -11,18 +11,26 @@ const INSTALLER_URL = "/downloads/VoCo_0.1.3_x64-setup.exe";
 
 export default function EmailForm({
   variant = "default",
-  buttonLabel = "申请内测",
+  buttonLabel = "加入内测名单",
 }: {
   variant?: "default" | "compact";
   buttonLabel?: string;
 }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
+  // Specific error copy — distinguishes empty vs malformed vs server fail.
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = email.trim();
-    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    if (!value) {
+      setErrorMsg("请输入邮箱");
+      setStatus("error");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setErrorMsg("请输入有效邮箱");
       setStatus("error");
       return;
     }
@@ -37,6 +45,7 @@ export default function EmailForm({
       await new Promise((r) => setTimeout(r, 350));
       setStatus("ok");
     } catch {
+      setErrorMsg("提交失败，请稍后再试");
       setStatus("error");
     }
   }
@@ -51,7 +60,7 @@ export default function EmailForm({
         }
       >
         <div className="flex items-start gap-3">
-          <span className="shrink-0 w-7 h-7 mt-0.5 rounded-full bg-[#0070f3]/10 text-[#0070f3] grid place-items-center">
+          <span className="shrink-0 w-7 h-7 mt-0.5 rounded-full bg-[#2563EB]/10 text-[#2563EB] grid place-items-center">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path
                 d="M2 7l3.5 3.5L12 4"
@@ -64,10 +73,10 @@ export default function EmailForm({
           </span>
           <div className="flex-1">
             <div className="text-[15px] font-medium text-ink">
-              已收到，谢谢。
+              已加入内测名单
             </div>
             <div className="text-[13px] text-body mt-1 leading-relaxed">
-              内测版已经可以下载，点下面按钮装上就能用。装完按住右 Alt 说话试试看。
+              内测安装包已经准备好，点下面按钮装上就能用。装完按住右 Alt 说话试试看。
             </div>
             <a
               href={INSTALLER_URL}
@@ -101,34 +110,48 @@ export default function EmailForm({
       onSubmit={onSubmit}
       className={
         variant === "compact"
-          ? "flex flex-col sm:flex-row gap-2 w-full max-w-[460px]"
-          : "flex flex-col sm:flex-row gap-2 w-full max-w-[480px]"
+          ? "flex flex-col w-full max-w-[460px]"
+          : "flex flex-col w-full max-w-[480px]"
       }
     >
-      <div className="flex-1 relative">
-        <input
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="your@email.com"
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            if (status === "error") setStatus("idle");
-          }}
-          aria-invalid={isError}
-          className={`w-full h-12 px-5 rounded-full border bg-canvas text-[15px] text-ink placeholder:text-mute outline-none transition focus:border-[#0070f3] focus:shadow-[0_0_0_4px_rgba(0,112,243,0.12)] ${
-            isError ? "border-[#ee0000]" : "border-hairline"
-          }`}
-        />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex-1 relative">
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="your@email.com"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (status === "error") {
+                setStatus("idle");
+                setErrorMsg("");
+              }
+            }}
+            aria-invalid={isError}
+            className={`w-full h-12 px-5 rounded-full border bg-canvas text-[15px] text-ink placeholder:text-mute outline-none transition focus:border-[#0070f3] focus:shadow-[0_0_0_4px_rgba(0,112,243,0.12)] ${
+              isError ? "border-[#ee0000]" : "border-hairline"
+            }`}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={status === "submitting"}
+          className="h-12 px-6 rounded-full bg-ink text-white text-[15px] font-semibold hover:bg-[#1a1a1a] hover:-translate-y-px hover:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.25)] active:translate-y-0 transition disabled:opacity-60 whitespace-nowrap"
+        >
+          {status === "submitting" ? "提交中…" : buttonLabel}
+        </button>
       </div>
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        className="h-12 px-6 rounded-full bg-ink text-white text-[15px] font-semibold hover:bg-[#1a1a1a] hover:-translate-y-px hover:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.25)] active:translate-y-0 transition disabled:opacity-60 whitespace-nowrap"
-      >
-        {status === "submitting" ? "提交中…" : buttonLabel}
-      </button>
+      {/* Reserve a row of space for error text so the layout doesn't jump
+          when an error appears / clears. Empty span keeps the height. */}
+      <div className="mt-2 min-h-[18px] text-[12px] text-left">
+        {isError ? (
+          <span className="text-[#ee0000]">{errorMsg}</span>
+        ) : (
+          <span>&nbsp;</span>
+        )}
+      </div>
     </form>
   );
 }
