@@ -36,3 +36,8 @@ Thumbs.db
 .playwright-mcp/
 hero.png
 voco-hero.png
+
+# Landing page iteration screenshots + competitor a11y dumps (one-off research, keep local)
+*.jpeg
+speakly-zh.md
+typeless.md
