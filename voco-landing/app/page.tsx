@@ -1,4 +1,3 @@
-import EmailForm from "./components/EmailForm";
 import LiveDemo from "./components/LiveDemo";
 import SpeedCompare from "./components/SpeedCompare";
 import FeatureAutoList from "./components/FeatureAutoList";
@@ -7,6 +6,42 @@ import FeatureTranslate from "./components/FeatureTranslate";
 import AppsAnywhere from "./components/AppsAnywhere";
 import FeaturePrivacy from "./components/FeaturePrivacy";
 import Faq from "./components/Faq";
+
+// Open-source project — CTA points at the public GitHub repo instead of the
+// old email-signup flow. The /releases page carries the Windows installer.
+const REPO_URL = "https://github.com/lee19950912-svg/voco";
+
+function DownloadCta({ center = false }: { center?: boolean }) {
+  return (
+    <div className={`flex flex-wrap gap-3 ${center ? "justify-center" : ""}`}>
+      <a
+        href={`${REPO_URL}/releases`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-12 px-6 items-center gap-2 rounded-full bg-ink text-white text-[15px] font-semibold hover:bg-[#1a1a1a] hover:-translate-y-px hover:shadow-[0_8px_24px_-6px_rgba(0,0,0,0.25)] active:translate-y-0 transition"
+      >
+        <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
+          <path
+            d="M7 1v8m0 0L3.5 5.5M7 9l3.5-3.5M2 12h10"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        下载 Windows 版
+      </a>
+      <a
+        href={REPO_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-12 px-6 items-center gap-2 rounded-full border border-hairline bg-canvas text-ink text-[15px] font-semibold hover:border-ink/30 hover:-translate-y-px transition"
+      >
+        在 GitHub 看源码
+      </a>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
@@ -49,10 +84,12 @@ function Nav() {
             常见问题
           </a>
           <a
-            href="#beta"
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
             className="inline-flex h-9 px-4 items-center text-[13px] font-semibold text-white bg-ink rounded-full hover:opacity-90 hover:-translate-y-px transition"
           >
-            加入内测
+            GitHub
           </a>
         </div>
       </div>
@@ -80,9 +117,9 @@ function Hero() {
             </p>
 
             <div className="hero-in hero-in-delay-2 mt-9" id="beta">
-              <EmailForm />
+              <DownloadCta />
               <p className="mt-3 text-[12px] text-mute">
-                内测期免费 · 仅用来通知发布 · 不会打扰你
+                开源免费 · MIT 许可 · Windows 10 / 11
               </p>
             </div>
           </div>
@@ -135,12 +172,12 @@ function CtaBand() {
           用说话<br />代替打字
         </h2>
         <p className="mt-5 text-[17px] leading-[1.65] text-body max-w-[560px] mx-auto">
-          留下邮箱，抢先体验 VoCo。正式版上线后第一时间通知你。
+          完全开源、免费使用。源码和 Windows 安装包都在 GitHub 上。
         </p>
         <div className="mt-8 flex flex-col items-center gap-3">
-          <EmailForm buttonLabel="加入内测名单" />
+          <DownloadCta center />
           <p className="text-[12px] text-mute">
-            只用于内测通知，不会发送垃圾邮件
+            MIT 许可 · 欢迎 Star 和贡献
           </p>
         </div>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] font-mono text-mute tracking-wider">

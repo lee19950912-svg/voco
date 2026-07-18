@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   delay?: number;
   className?: string;
-  as?: keyof JSX.IntrinsicElements;
+  as?: keyof React.JSX.IntrinsicElements;
   children: React.ReactNode;
 };
 
