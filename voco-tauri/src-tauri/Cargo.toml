@@ -37,10 +37,7 @@ serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 
-# --- WebSocket (火山 ASR) ---
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
-
-# --- HTTP (DeepSeek/OpenAI) ---
+# --- HTTP (OpenAI-compatible chat + ASR) ---
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 
 # --- Audio I/O ---
@@ -55,9 +52,6 @@ rodio = { version = "0.20", default-features = false, features = ["wav"] }
 
 # --- Clipboard ---
 arboard = "3"
-
-# --- Compression (gzip for 火山 payload) ---
-flate2 = "1"
 
 # --- Misc ---
 uuid = { version = "1", features = ["v4"] }

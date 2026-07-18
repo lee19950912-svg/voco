@@ -18,7 +18,6 @@ A Windows desktop app built with Tauri + React + Rust.
 |-----------|-------------|
 | `voco-tauri/` | **Current desktop app** (Tauri + React + Rust) — active development |
 | `voco-landing/` | Product landing page (React + Vite) |
-| Root `*.py` | Early PyQt prototype, archived and no longer maintained |
 
 ## Quick start (desktop app)
 

@@ -6,7 +6,7 @@
 //! on a dedicated `std::thread`, and the engine talks to it through `mpsc`
 //! channels — the `RecordingSession` we hand out is fully `Send + Sync`.
 //!
-//! Format we deliver: 16 kHz, 16-bit, mono WAV — matches 火山 ASR's input.
+//! Format we deliver: 16 kHz, 16-bit, mono WAV — what OpenAI-compatible ASR expects.
 
 use anyhow::{anyhow, Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

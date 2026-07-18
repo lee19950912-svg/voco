@@ -1,7 +1,7 @@
 //! User-managed glossary of proper nouns / domain terms.
 //!
 //! Stored at %APPDATA%/VoCo/dictionary.json. We inject the term list as a
-//! hint into the DeepSeek polish system prompt — if ASR misrecognizes a
+//! hint into the polish system prompt — if ASR misrecognizes a
 //! known term (e.g., 公司名、人名), the polisher gets a chance to correct it.
 
 use crate::config::config_dir;
@@ -52,7 +52,7 @@ impl Dictionary {
 
     /// Render as a hint to inject into the polish prompt. Returns None if
     /// the dictionary is empty — caller skips the injection.
-    /// Wording is intentionally strong / imperative because DeepSeek tends
+    /// Wording is intentionally strong / imperative because the model tends
     /// to soft-pedal "preferences" — we want strict replacement.
     pub fn polish_hint(&self) -> Option<String> {
         let terms: Vec<&str> = self
