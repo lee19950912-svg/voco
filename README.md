@@ -5,7 +5,7 @@ A Windows desktop app built with Tauri + React + Rust.
 
 ## Features
 
-- 🎙️ **Real-time speech recognition** — powered by Volcano Engine short-audio recognition, accurate for Chinese
+- 🎙️ **Real-time speech recognition** — via any OpenAI-compatible transcription endpoint
 - ✨ **AI polishing** — turns casual speech into clean, well-formed writing
 - 🌐 **Instant translation** — speak Chinese, get English / Korean out
 - 📝 **Auto-formatting & code-aware output** — formats the text to match the context you're in
@@ -33,10 +33,10 @@ You'll need [Rust](https://www.rust-lang.org/), [Node.js](https://nodejs.org/) a
 
 ## Configuring keys
 
-This repository contains **no secrets**. Before running, register and fill in `voco-tauri/.env` yourself (template at `voco-tauri/.env.example`):
+This repository contains **no secrets** — VoCo is bring-your-own-key. On first launch (or later in Settings → AI service), paste an **OpenAI-compatible** endpoint and API key. Anything OpenAI-compatible works: OpenAI directly, a domestic relay, or a local model server.
 
-- Volcano Engine (speech recognition): https://www.volcengine.com/
-- DeepSeek (AI polishing): https://platform.deepseek.com/
+- Chat (polish + translate) and speech-to-text share one endpoint by default; speech-to-text can be split onto a separate endpoint when needed.
+- Keys are stored locally and never uploaded. A `.env` with `OPENAI_API_KEY` is also honored as a fallback (see `voco-tauri/.env.example`).
 
 ## License
 

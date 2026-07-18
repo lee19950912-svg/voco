@@ -30,12 +30,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SetupWizard } from "./SetupWizard";
+import { ApiKeyFields } from "./ApiKeyFields";
 import type {
   VoCoConfig,
   VoCoResult,
   VoCoStats,
   Session,
   DictEntry,
+  ApiKeyStatus,
 } from "./types";
 import { TRANSLATION_TARGETS, TRANSLATION_TARGET_LABEL } from "./types";
 import "./App.css";
@@ -67,6 +69,8 @@ function App() {
   // Settings page never sees a null→resolved transition (which manifested
   // as the toggle flashing each time the user opened Settings).
   const [autostart, setAutostart] = useState<boolean | null>(null);
+  // Whether the user still needs to fill an API key — drives the home banner.
+  const [needKey, setNeedKey] = useState(false);
 
   // Auto-dismiss errors after 8 seconds — they're transient by nature and
   // a stuck red banner makes the app feel broken.
@@ -145,6 +149,15 @@ function App() {
     };
   }, []);
 
+  // Re-check API-key status whenever the user lands on Home (e.g. right after
+  // filling it in Settings) so the "fill your key" banner clears promptly.
+  useEffect(() => {
+    if (page !== "home") return;
+    invoke<ApiKeyStatus>("check_api_keys")
+      .then((s) => setNeedKey(!s.chat))
+      .catch(() => {});
+  }, [page]);
+
   // First-run wizard takes over the whole window until the user finishes it.
   if (cfg && !wizardDone) {
     return (
@@ -222,6 +235,8 @@ function App() {
             stats={stats}
             lastError={lastError}
             onDismissError={() => setLastError("")}
+            needKey={needKey}
+            onGoSettings={() => setPage("settings")}
           />
         )}
         {page === "history" && (
@@ -251,12 +266,16 @@ function HomePage({
   stats,
   lastError,
   onDismissError,
+  needKey,
+  onGoSettings,
 }: {
   cfg: VoCoConfig | null;
   sessionCount: number;
   stats: VoCoStats;
   lastError: string;
   onDismissError: () => void;
+  needKey: boolean;
+  onGoSettings: () => void;
 }) {
   const targetLabel =
     TARGET_LANG_LABEL[cfg?.translate_target ?? "ko"] ?? cfg?.translate_target;
@@ -276,6 +295,23 @@ function HomePage({
         </div>
         <HeroIllustration />
       </section>
+
+      {needKey && (
+        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-center gap-3 shrink-0">
+          <AlertTriangle
+            size={18}
+            strokeWidth={2}
+            className="shrink-0 text-amber-600"
+          />
+          <span className="flex-1">还没填 API Key，VoCo 暂时不能用。</span>
+          <button
+            onClick={onGoSettings}
+            className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-[13px] font-medium hover:bg-amber-700 transition-colors whitespace-nowrap"
+          >
+            去填 →
+          </button>
+        </div>
+      )}
 
       {lastError && (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-3 shrink-0">
@@ -857,25 +893,11 @@ function SettingsPage({
     <div className="p-8 max-w-[1200px] mx-auto">
       <h1 className="text-[28px] font-semibold tracking-tight">设置</h1>
 
-      <Card title="地区" icon={<Globe size={16} strokeWidth={1.8} />}>
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <RegionOption
-            label="中国大陆"
-            desc="国内引擎，中文最准，价格低"
-            selected={cfg.region !== "overseas"}
-            onSelect={() => update("region", "china")}
-          />
-          <RegionOption
-            label="海外"
-            desc="OpenAI 引擎，多语强，海外可达"
-            selected={cfg.region === "overseas"}
-            onSelect={() => update("region", "overseas")}
-          />
-        </div>
-        <p className="text-[11px] text-black/45 pt-3 pb-1">
-          切换后立即生效，下次录音就用对应的服务。海外档需要先在 .env 里设置
-          OVERSEAS_API_KEY。
+      <Card title="AI 服务" icon={<Globe size={16} strokeWidth={1.8} />}>
+        <p className="text-[12px] text-black/50 pb-3 leading-relaxed">
+          VoCo 用你自己的 key 干活 — 不上传、只存本地。填任何 OpenAI 兼容的服务：OpenAI 官方、国内中转、本地模型都行。
         </p>
+        <ApiKeyFields cfg={cfg} update={update} />
       </Card>
 
       <Card title="按下快捷键时" icon={<Sparkles size={16} strokeWidth={1.8} />}>

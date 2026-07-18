@@ -1,13 +1,8 @@
 //! OpenAI Whisper / gpt-4o-mini-transcribe — speech-to-text via the
 //! OpenAI-compatible `/audio/transcriptions` endpoint.
 //!
-//! Goes through whatever base URL the user picked for their "overseas"
-//! region (currently yunwu.ai, but any OpenAI-compatible relay works).
-//!
-//! Why not the same code path as Volcengine? Volcengine uses a binary
-//! WebSocket protocol with a custom framing; OpenAI uses HTTP multipart.
-//! Two completely different transports → two modules. They're swapped at
-//! the `process_pipeline` level based on `cfg.region`.
+//! Goes through whatever base URL the user configured — OpenAI direct, a
+//! domestic OpenAI-compatible relay, or a local whisper server all work.
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::multipart::{Form, Part};
@@ -15,12 +10,6 @@ use serde::Deserialize;
 
 use crate::ai::SHARED_HTTP;
 
-/// Newer (Mar 2025), cheaper than whisper-1, better Korean accuracy.
-/// We hardcode this one model: the relay scopes permissions per model,
-/// so a "fallback" to whisper-1 / 4o-transcribe is almost always 403 in
-/// practice (users buy ONE model). Better to retry the same one and
-/// surface a clear error if it stays down.
-const ASR_MODEL: &str = "gpt-4o-mini-transcribe";
 /// Wait between retries when the relay returns 429. Short enough to feel
 /// instant on a brief saturation spike, long enough that we don't slam
 /// the relay during a real outage.
@@ -39,21 +28,22 @@ struct TranscriptionResponse {
 pub async fn recognize(
     base_url: &str,
     api_key: &str,
+    model: &str,
     wav_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String> {
     if api_key.is_empty() {
         return Err(anyhow!(
-            "海外档需要 OVERSEAS_API_KEY，请在 .env 里设置后重启 VoCo。"
+            "还没填 API Key，请在 VoCo 设置 → AI 服务里填好后再试。"
         ));
     }
     if base_url.is_empty() {
-        return Err(anyhow!("海外档的 base_url 未设置"));
+        return Err(anyhow!("识别服务地址未设置，请在 VoCo 设置 → AI 服务里填好。"));
     }
 
     let mut attempt = 0;
     loop {
-        match try_model(base_url, api_key, wav_bytes, language, ASR_MODEL).await {
+        match try_model(base_url, api_key, wav_bytes, language, model).await {
             Ok(text) => return Ok(text),
             Err(e) => {
                 // Only 429 (rate limit / upstream saturation) is worth

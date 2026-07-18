@@ -4,9 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { FileText, Sparkles, Globe, Mic, AlertTriangle } from "lucide-react";
 import type { VoCoConfig } from "./types";
 import { TRANSLATION_TARGETS } from "./types";
+import { ApiKeyFields } from "./ApiKeyFields";
 
 const TOTAL_STEPS = 5;
-const STEP_LABELS = ["欢迎", "地区", "麦克风", "快捷键", "完成"];
+const STEP_LABELS = ["欢迎", "填 Key", "麦克风", "快捷键", "完成"];
 
 export function SetupWizard({
   onDone,
@@ -27,15 +28,6 @@ export function SetupWizard({
   useEffect(() => {
     invoke<string[]>("list_microphones").then(setMics).catch(() => {});
     invoke<boolean>("has_korean_ime").then(setKoreanIme).catch(() => {});
-    // Smart default for region: if the user's browser locale isn't a
-    // Chinese variant, flip from the "china" default to "overseas". They
-    // can still flip back on the region step. Only runs on first launch
-    // (wizard mount) so existing users keep whatever they had.
-    const lang = (navigator.language || "").toLowerCase();
-    if (cfg.region !== "overseas" && !lang.startsWith("zh")) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      update("region", "overseas");
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,30 +149,15 @@ export function SetupWizard({
 
         {step === 2 && (
           <div className="mt-10 voco-step-fade">
-            <h2 className="text-xl font-semibold">你在哪？</h2>
-            <p className="mt-2 text-black/55 text-sm">
-              VoCo 会根据你的位置自动用最快的 AI 服务。以后能在设置里改。
+            <h2 className="text-xl font-semibold">填入你的 AI 服务</h2>
+            <p className="mt-2 text-black/55 text-sm leading-relaxed">
+              VoCo 用你自己的 key 干活 — 不上传、只存本地。填任何 OpenAI 兼容的服务都行。
+              <br />
+              还没有？点下面「跳过」，之后在设置里随时能填。
             </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <WizardRegionCard
-                label="中国大陆"
-                desc="国内引擎，中文最准"
-                selected={cfg.region !== "overseas"}
-                onSelect={() => update("region", "china")}
-              />
-              <WizardRegionCard
-                label="海外"
-                desc="OpenAI 引擎，多语强，跨境可达"
-                selected={cfg.region === "overseas"}
-                onSelect={() => update("region", "overseas")}
-              />
+            <div className="mt-6">
+              <ApiKeyFields cfg={cfg} update={update} />
             </div>
-            {cfg.region === "overseas" && (
-              <p className="mt-4 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                海外档需要在 <span className="voco-mono">%APPDATA%\VoCo\.env</span> 里设置
-                <span className="voco-mono"> OVERSEAS_API_KEY=...</span>，然后重启 VoCo。
-              </p>
-            )}
           </div>
         )}
 
@@ -406,44 +383,15 @@ export function SetupWizard({
             onClick={next}
             className="bg-[#2563EB] text-white py-2.5 px-8 rounded-lg font-medium hover:bg-[#1D4ED8] transition-colors"
           >
-            {step === TOTAL_STEPS ? "开始使用" : "下一步"}
+            {step === TOTAL_STEPS
+              ? "开始使用"
+              : step === 2 && !cfg.api_key.trim()
+                ? "跳过"
+                : "下一步"}
           </button>
         </div>
       </div>
     </div>
-  );
-}
-
-function WizardRegionCard({
-  label,
-  desc,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  desc: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={
-        "text-left p-5 rounded-xl border transition-colors " +
-        (selected
-          ? "border-[#2563eb] bg-[#2563eb]/[0.04] ring-1 ring-[#2563eb]/30"
-          : "border-black/[0.08] hover:bg-black/[0.02]")
-      }
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[15px] font-medium text-black/85">{label}</span>
-        {selected && (
-          <span className="text-[11px] text-[#2563eb] font-medium">已选</span>
-        )}
-      </div>
-      <div className="text-[12px] text-black/55 mt-1.5">{desc}</div>
-    </button>
   );
 }
 

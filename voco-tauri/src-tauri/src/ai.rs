@@ -1,14 +1,8 @@
 //! AI post-processing: polish + translate.
 //!
-//! Both polish and translate default to DeepSeek (国内直连，低延迟，便宜):
-//!   polish    -> DeepSeek V4-Pro   (深度推理，更适合长句润色)
-//!   translate -> DeepSeek V4-Flash (轻量快，短句翻译够用，韩日多语种 OK)
-//!
-//! Translate engine is user-switchable from settings (DeepSeek / OpenAI /
-//! 中转站) for users who specifically need GPT-grade Korean quality.
-//!
-//! Both endpoints are OpenAI-compatible chat completions, so one client
-//! struct handles both — only base_url/model/api_key differ.
+//! Both run against the user's OpenAI-compatible chat endpoint (base_url /
+//! api_key / model all come from config). One client struct handles both —
+//! only the system prompt differs.
 
 use anyhow::{anyhow, Context, Result};
 use once_cell::sync::Lazy;
@@ -208,6 +202,15 @@ impl AiClient {
             label,
             http: SHARED_HTTP.clone(),
         })
+    }
+
+    /// Lightweight connectivity check for the settings "test connection"
+    /// button — fires a tiny chat request and errors if the base_url / key /
+    /// model don't actually work together.
+    pub async fn ping(&self) -> Result<()> {
+        self.chat("You are a connection test. Reply with: ok", "ping")
+            .await
+            .map(|_| ())
     }
 
     /// Polish with optional system-prompt extras:

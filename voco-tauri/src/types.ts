@@ -2,14 +2,15 @@
 // match it in src-tauri/src/config.rs (AppConfig) and stats.rs (Session/Stats).
 
 export interface VoCoConfig {
-  recognize_engine: string;
   recognize_language: string;
-  polish_engine: string;
-  polish_base_url: string;
-  polish_model: string;
-  translate_engine: string;
-  translate_base_url: string;
-  translate_model: string;
+  // AI service (OpenAI-compatible, bring-your-own-key). The chat endpoint
+  // drives polish + translate; the asr_* fields fall back to it when blank.
+  api_base_url: string;
+  api_key: string;
+  chat_model: string;
+  asr_base_url: string;
+  asr_key: string;
+  asr_model: string;
   translate_target: string;
   trigger_polish: string;
   trigger_translate_modifier: string;
@@ -20,7 +21,6 @@ export interface VoCoConfig {
   mute_others_while_recording: boolean;
   sound_enabled: boolean;
   sound_volume: number;
-  region?: string;
   default_action?: string;
 }
 
@@ -49,10 +49,8 @@ export interface VoCoStats {
 }
 
 export interface ApiKeyStatus {
-  volc: boolean;
-  deepseek: boolean;
-  relay: boolean;
-  openai: boolean;
+  chat: boolean;
+  asr: boolean;
 }
 
 export interface DictEntry {

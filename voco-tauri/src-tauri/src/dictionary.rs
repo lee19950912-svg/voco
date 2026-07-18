@@ -94,15 +94,4 @@ impl Dictionary {
             terms = terms.join("、")
         ))
     }
-
-    /// Build a hot-words list for the ASR layer. Each entry becomes `{word:
-    /// "<term>"}` — the structure used by Volcengine's V3 ASR (corpus.context
-    /// .hotwords). Empty list when the dictionary has no usable entries.
-    pub fn asr_hotwords(&self) -> Vec<String> {
-        self.entries
-            .iter()
-            .map(|e| e.term.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
-    }
 }

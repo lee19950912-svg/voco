@@ -1,9 +1,9 @@
 //! VoCo Tauri backend — entry point.
 //!
 //! Modules:
-//!   volc_asr        : 火山 v2/asr WebSocket recognition
-//!   ai              : DeepSeek polish + OpenAI translate (chat-completions)
-//!   config          : voco config (yaml) + .env API keys
+//!   openai_asr      : OpenAI-compatible /audio/transcriptions recognition
+//!   ai              : polish + translate (OpenAI-compatible chat-completions)
+//!   config          : voco config (yaml) + bring-your-own-key API keys
 //!   audio           : cpal microphone capture → WAV
 //!   paste           : clipboard + Windows SendInput Ctrl+V
 //!   voice_engine    : the orchestrator (press→record→release→ASR→polish→paste)
@@ -29,7 +29,6 @@ mod polling_hotkey;
 mod sound;
 mod stats;
 mod voice_engine;
-mod volc_asr;
 
 use config::AppConfig;
 use dictionary::Dictionary;
@@ -56,12 +55,6 @@ async fn save_config(
     cfg: AppConfig,
     #[cfg(windows)] hotkey: tauri::State<'_, HotkeyHandlesState>,
 ) -> Result<(), String> {
-    // apply_region rewrites every engine field from self.region so the
-    // frontend only ever needs to set the region toggle — engine internals
-    // (recognize_engine / polish_base_url / translate_model / etc.) all
-    // cascade from one switch.
-    let mut cfg = cfg;
-    cfg.apply_region();
     cfg.save().map_err(|e| e.to_string())?;
     // Push fresh sound prefs into the audio thread so volume / on-off
     // changes take effect on the very next cue without an app restart.
@@ -108,10 +101,8 @@ fn get_config_dir() -> Result<String, String> {
 /// configuration status.
 #[derive(serde::Serialize)]
 struct ApiKeyStatus {
-    volc: bool,
-    deepseek: bool,
-    relay: bool,
-    openai: bool,
+    chat: bool,
+    asr: bool,
 }
 
 #[tauri::command]
@@ -141,13 +132,21 @@ fn has_korean_ime() -> bool {
 
 #[tauri::command]
 fn check_api_keys() -> ApiKeyStatus {
-    let k = config::ApiKeys::from_env();
+    let cfg = AppConfig::load().unwrap_or_default();
     ApiKeyStatus {
-        volc: !k.volc_app_id.is_empty() && !k.volc_access_token.is_empty(),
-        deepseek: !k.deepseek.is_empty(),
-        relay: !k.relay.is_empty(),
-        openai: !k.openai.is_empty(),
+        chat: !cfg.chat_key().trim().is_empty(),
+        asr: !cfg.asr_key().trim().is_empty(),
     }
+}
+
+/// Test an OpenAI-compatible chat endpoint with the given credentials — backs
+/// the settings "test connection" button. Ok = a successful round-trip;
+/// Err(msg) = a human-readable failure the UI can show verbatim.
+#[tauri::command]
+async fn test_api(base_url: String, api_key: String, model: String) -> Result<(), String> {
+    let client = ai::AiClient::new(&base_url, &api_key, &model, "连接测试")
+        .map_err(|e| e.to_string())?;
+    client.ping().await.map_err(|e| e.to_string())
 }
 
 /// Manual trigger for the recording pipeline — used by the setup wizard's
@@ -270,9 +269,8 @@ pub fn run() {
         }
     }
     tracing::info!(
-        "VoCo starting. DEEPSEEK_API_KEY set: {} | VOLC_APP_ID set: {}",
-        !std::env::var("DEEPSEEK_API_KEY").unwrap_or_default().is_empty(),
-        !std::env::var("VOLC_APP_ID").unwrap_or_default().is_empty(),
+        "VoCo starting. OPENAI_API_KEY (env fallback) set: {}",
+        !std::env::var("OPENAI_API_KEY").unwrap_or_default().is_empty(),
     );
 
     // Logging: stdout (visible during `pnpm tauri dev`) PLUS a daily-rolling
@@ -369,6 +367,7 @@ pub fn run() {
             clear_history,
             get_config_dir,
             check_api_keys,
+            test_api,
             get_dictionary,
             save_dictionary,
             has_korean_ime

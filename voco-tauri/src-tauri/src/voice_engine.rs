@@ -13,11 +13,10 @@
 use crate::ai::AiClient;
 use crate::app_context::AppContext;
 use crate::audio::RecordingSession;
-use crate::config::{ApiKeys, AppConfig};
+use crate::config::AppConfig;
 use crate::dictionary::Dictionary;
 use crate::paste::paste_text;
 use crate::stats::{History, Session};
-use crate::volc_asr::{recognize as volc_recognize, VolcConfig};
 
 use chrono::Utc;
 use std::time::Instant;
@@ -333,71 +332,28 @@ async fn process_pipeline(
 ) -> Result<PipelineOutcome> {
     let context_line = context.as_prompt_line();
     let cfg = AppConfig::load()?;
-    let keys = ApiKeys::from_env();
-
-    // ASR step. Route between Volcengine (国内, 中文最准) and OpenAI
-    // (海外, 多语强) based on the user's region setting. Each branch is
-    // responsible for its own pre-flight key check.
-    let raw_text = if cfg.region == "overseas" {
-        if keys.overseas.is_empty() {
-            return Err(anyhow!(
-                "海外档需要 OVERSEAS_API_KEY，请在 .env 里设置后重启 VoCo。"
-            ));
-        }
-        let lang_hint = if cfg.recognize_language.is_empty() {
-            None
-        } else {
-            Some(cfg.recognize_language.as_str())
-        };
-        // Share the same base_url as polish/translate — apply_region keeps
-        // them in lockstep, so the user can flip "overseas" between OpenAI
-        // direct / yunwu / any other relay without code changes.
-        crate::openai_asr::recognize(
-            &cfg.polish_base_url,
-            &keys.overseas,
-            &wav_bytes,
-            lang_hint,
-        )
-        .await?
+    // ASR step — single OpenAI-compatible /audio/transcriptions endpoint.
+    // Base URL / key / model come from the user's config; the asr_* fields
+    // fall back to the chat endpoint when the user hasn't split them off.
+    let asr_key = cfg.asr_key();
+    if asr_key.trim().is_empty() {
+        return Err(anyhow!(
+            "还没填 API Key。打开 VoCo 设置 → AI 服务，填入服务地址和 key 后再试。"
+        ));
+    }
+    let lang_hint = if cfg.recognize_language.is_empty() {
+        None
     } else {
-        // 国内档：火山引擎
-        if keys.volc_app_id.is_empty() || keys.volc_access_token.is_empty() {
-            return Err(anyhow!(
-                "未配置火山引擎语音识别密钥，请在设置中填写后再试。"
-            ));
-        }
-        let volc = VolcConfig {
-            appid: keys.volc_app_id.clone(),
-            token: keys.volc_access_token.clone(),
-            cluster_zh: keys.volc_cluster_zh.clone(),
-            cluster_ko: keys.volc_cluster_ko.clone(),
-            language: cfg.recognize_language.clone(),
-        };
-        // Build ASR hot words from the user's dictionary — sent optimistically
-        // to v2/asr (Volcengine V3-style corpus block). If v2 strict-validates
-        // and rejects the unknown field, we'd kill all recognition for users
-        // with a non-empty dictionary. So: on a protocol-level error we retry
-        // ONCE without the corpus. (Hotwords don't apply to OpenAI ASR.)
-        let asr_hotwords = Dictionary::load().asr_hotwords();
-        match volc_recognize(&volc, &wav_bytes, &asr_hotwords).await {
-            Ok(t) => t,
-            Err(e) if !asr_hotwords.is_empty() && {
-                let s = e.to_string();
-                //   - code=1013 "no valid speeches" → legitimate empty audio,
-                //     retrying just doubles the user's wait for the same answer.
-                //   - Any other "code=" or JSON parse trouble → maybe schema rejection.
-                !s.contains("code=1013")
-                    && (s.contains("code=") || s.contains("解析响应 JSON"))
-            } =>
-            {
-                tracing::warn!(
-                    "火山 ASR 带 corpus 失败（可能 v2 不接受热词字段），不带 corpus 重试一次：{e}"
-                );
-                volc_recognize(&volc, &wav_bytes, &[]).await?
-            }
-            Err(e) => return Err(e),
-        }
+        Some(cfg.recognize_language.as_str())
     };
+    let raw_text = crate::openai_asr::recognize(
+        &cfg.asr_base(),
+        &asr_key,
+        &cfg.asr_model(),
+        &wav_bytes,
+        lang_hint,
+    )
+    .await?;
 
     // Empty recognition — most likely silence or background noise. Tell the
     // user explicitly so they don't think the app silently swallowed input.
@@ -413,27 +369,11 @@ async fn process_pipeline(
         "raw" => raw_text.clone(),
         "polish" => {
             let hint = Dictionary::load().polish_hint();
-            // Region drives both the key picked and the label shown in
-            // error messages. Engine URLs/models were already pinned to
-            // the right service by apply_region() at save time.
-            // For overseas: prefer the chat-specific key (yunwu scopes
-            // keys per model group), fall back to the general overseas
-            // key if the user only set one.
-            let overseas_chat_key = if keys.overseas_chat.is_empty() {
-                &keys.overseas
-            } else {
-                &keys.overseas_chat
-            };
-            let (api_key, label) = if cfg.region == "overseas" {
-                (overseas_chat_key, "海外 AI 润色")
-            } else {
-                (&keys.deepseek, "DeepSeek 润色")
-            };
             match AiClient::new(
-                &cfg.polish_base_url,
-                api_key,
-                &cfg.polish_model,
-                label,
+                &cfg.chat_base(),
+                &cfg.chat_key(),
+                &cfg.chat_model(),
+                "AI 润色",
             ) {
                 Ok(client) => match client
                     .polish_with_hint(&raw_text, hint.as_deref(), context_line.as_deref())
@@ -458,27 +398,15 @@ async fn process_pipeline(
             }
         }
         "translate" => {
-            // Same region-driven key pick as polish above. Chat key
-            // preferred, ASR key as single-key fallback.
-            let overseas_chat_key = if keys.overseas_chat.is_empty() {
-                &keys.overseas
-            } else {
-                &keys.overseas_chat
-            };
-            let (api_key, label) = if cfg.region == "overseas" {
-                (overseas_chat_key, "海外 AI 翻译")
-            } else {
-                (&keys.deepseek, "DeepSeek 翻译")
-            };
             // Dictionary also applies to translate: preserve proper nouns
             // through the translation step (e.g. "飞书" stays "飞书"/"Feishu"
             // instead of getting translated as "flying book").
             let hint = Dictionary::load().translate_hint();
             match AiClient::new(
-                &cfg.translate_base_url,
-                api_key,
-                &cfg.translate_model,
-                label,
+                &cfg.chat_base(),
+                &cfg.chat_key(),
+                &cfg.chat_model(),
+                "AI 翻译",
             ) {
                 Ok(client) => match client
                     .translate_with_hint(

@@ -1,27 +1,39 @@
-//! VoCo configuration — read from voco.toml + .env.
-//! Replaces the YAML-based config.yaml of the PyQt prototype.
+//! VoCo configuration — read from voco.toml (yaml) + optional .env fallback.
+//!
+//! Open-source model: the user brings their own OpenAI-compatible endpoint.
+//! `api_*` drives chat (polish + translate); `asr_*` drives speech-to-text and
+//! falls back to the chat endpoint/key when left blank (most providers that do
+//! chat also do `/audio/transcriptions`; the split is only needed when they
+//! don't). Keys live in the config file and can also come from a `.env`
+//! (`OPENAI_API_KEY`) for users who prefer that.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Fallbacks used whenever a field is blank. Kept as consts so the resolver
+/// methods and Default stay in sync.
+const DEFAULT_CHAT_BASE: &str = "https://api.openai.com/v1";
+const DEFAULT_CHAT_MODEL: &str = "gpt-4o-mini";
+const DEFAULT_ASR_MODEL: &str = "gpt-4o-mini-transcribe";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
-    // Recognition
-    pub recognize_engine: String, // "volcengine" | "local"
-    pub recognize_language: String, // "zh" | "ko"
+    /// ISO 639-1 language hint passed to ASR ("zh" | "ko" | ...). Empty = auto.
+    pub recognize_language: String,
 
-    // Polish (DeepSeek)
-    pub polish_engine: String,        // "deepseek" | "openai" | "relay"
-    pub polish_base_url: String,
-    pub polish_model: String,
+    // === AI service (OpenAI-compatible, bring-your-own-key) ===
+    /// Chat endpoint — drives BOTH polish and translate.
+    pub api_base_url: String,
+    pub api_key: String,
+    pub chat_model: String,
+    /// ASR endpoint. Blank base_url/key fall back to the chat ones above.
+    pub asr_base_url: String,
+    pub asr_key: String,
+    pub asr_model: String,
 
-    // Translate (OpenAI via relay)
-    pub translate_engine: String,
-    pub translate_base_url: String,
-    pub translate_model: String,
-    pub translate_target: String, // "ko" | "en" | ...
+    pub translate_target: String, // "en" | "ko" | ...
 
     // Hotkeys
     pub trigger_polish: String,             // "alt_r"
@@ -29,7 +41,7 @@ pub struct AppConfig {
     // because shift_r combined with alt_r/ctrl_r is Windows's default
     // "switch IME" hotkey. Defaulting to ctrl_r side-steps that conflict
     // entirely without asking users to change OS-level settings.
-    pub trigger_mode: String,              // "hold" | "toggle"
+    pub trigger_mode: String, // "hold" | "toggle"
 
     pub ui_language: String,
     pub input_device: String,
@@ -46,13 +58,6 @@ pub struct AppConfig {
     /// audible without being startling on a quiet desk.
     pub sound_volume: f32,
 
-    /// Where the user is — drives engine routing.
-    /// "china"    → Volcengine ASR + DeepSeek polish/translate (国内直连, 中文最准)
-    /// "overseas" → OpenAI ASR + GPT polish/translate (海外可达, 多语强)
-    /// First-run default comes from system locale (zh-CN → china, else overseas).
-    /// User can flip in Settings or wizard at any time.
-    pub region: String,
-
     /// What "bare hotkey press" produces (no modifier).
     /// "polish" → run ASR + AI polish (cleaner output, ~+0.5-1s latency)
     /// "raw"    → run ASR only, paste verbatim (faster, cheaper, more
@@ -64,15 +69,14 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            recognize_engine: "volcengine".into(),
             recognize_language: "zh".into(),
-            polish_engine: "deepseek".into(),
-            polish_base_url: "https://api.deepseek.com".into(),
-            polish_model: "deepseek-v4-flash".into(),
-            translate_engine: "deepseek".into(),
-            translate_base_url: "https://api.deepseek.com".into(),
-            translate_model: "deepseek-v4-flash".into(),
-            translate_target: "ko".into(),
+            api_base_url: DEFAULT_CHAT_BASE.into(),
+            api_key: String::new(),
+            chat_model: DEFAULT_CHAT_MODEL.into(),
+            asr_base_url: String::new(),
+            asr_key: String::new(),
+            asr_model: DEFAULT_ASR_MODEL.into(),
+            translate_target: "en".into(),
             trigger_polish: "alt_r".into(),
             trigger_translate_modifier: "ctrl_r".into(),
             trigger_mode: "hold".into(),
@@ -82,7 +86,6 @@ impl Default for AppConfig {
             mute_others_while_recording: true,
             sound_enabled: true,
             sound_volume: 0.7,
-            region: "china".into(),
             default_action: "polish".into(),
         }
     }
@@ -108,32 +111,12 @@ impl AppConfig {
             return Ok(Self::default());
         }
         let text = std::fs::read_to_string(&path)?;
-        // We use serde_yaml here since the legacy Python config used YAML; TOML
-        // would be cleaner but yaml lets users with old configs port over.
-        let mut cfg: Self = serde_yaml::from_str(&text).unwrap_or_default();
-        // One-shot migration: existing users on the slow polish-pro default
-        // (1-2s/call, painful across cross-border RTT) get bumped to flash
-        // (300-800ms). Short-form polish quality is indistinguishable between
-        // the two. Translation already defaults to flash, so this just makes
-        // both AI steps consistent.
-        if cfg.polish_model == "deepseek-v4-pro" {
-            cfg.polish_model = "deepseek-v4-flash".into();
-            let _ = cfg.save();
-            tracing::info!("config: migrated polish_model from v4-pro to v4-flash for latency");
-        }
-        // One-shot migration: users who configured "overseas" against the
-        // yunwu.ai relay during dev get auto-migrated to OpenAI direct.
-        // yunwu's per-model permission system caused too much friction
-        // (long 429 saturations, separate keys per model group). Direct
-        // OpenAI is simpler: one key, no upstream pool issues.
-        if cfg.region == "overseas"
-            && (cfg.polish_base_url.contains("yunwu.ai")
-                || cfg.translate_base_url.contains("yunwu.ai"))
-        {
-            cfg.apply_region();
-            let _ = cfg.save();
-            tracing::info!("config: migrated overseas base_url from yunwu.ai to api.openai.com");
-        }
+        // serde_yaml + `#[serde(default)]` means fields dropped in the
+        // open-source rework (region / engine names / per-engine urls) are
+        // silently ignored when an old config is loaded, and new fields fall
+        // back to Default — so upgrading users keep their hotkeys/prefs and
+        // simply land on the "fill your key" state.
+        let cfg: Self = serde_yaml::from_str(&text).unwrap_or_default();
         Ok(cfg)
     }
 
@@ -144,75 +127,65 @@ impl AppConfig {
         Ok(())
     }
 
-    /// Rewrite every AI/ASR engine field to match `self.region`. Idempotent.
-    /// This is the single source of truth — the frontend never sets engine
-    /// internals directly, it only flips `region` and lets this method
-    /// cascade. Called from `save_config` so a region flip in Settings
-    /// instantly retargets everything.
-    pub fn apply_region(&mut self) {
-        match self.region.as_str() {
-            "overseas" => {
-                // OpenAI direct (api.openai.com/v1). One key covers ASR
-                // + chat (unlike per-model relays). Same base URL for both
-                // /audio/transcriptions and /chat/completions endpoints.
-                let openai = "https://api.openai.com/v1".to_string();
-                self.recognize_engine = "openai".into();
-                self.polish_engine = "openai".into();
-                self.polish_base_url = openai.clone();
-                self.polish_model = "gpt-4o-mini".into();
-                self.translate_engine = "openai".into();
-                self.translate_base_url = openai;
-                self.translate_model = "gpt-4o-mini".into();
-            }
-            _ => {
-                // Default: 国内引擎. Empty/unknown region falls here too so
-                // legacy configs (missing the field) keep working.
-                self.recognize_engine = "volcengine".into();
-                self.polish_engine = "deepseek".into();
-                self.polish_base_url = "https://api.deepseek.com".into();
-                self.polish_model = "deepseek-v4-flash".into();
-                self.translate_engine = "deepseek".into();
-                self.translate_base_url = "https://api.deepseek.com".into();
-                self.translate_model = "deepseek-v4-flash".into();
-            }
+    // --- Resolved accessors: config value if set, else a sensible fallback.
+    //     The engine code always goes through these so blank fields never
+    //     reach the HTTP layer. ---
+
+    /// Chat endpoint base URL (for polish + translate).
+    pub fn chat_base(&self) -> String {
+        let b = self.api_base_url.trim();
+        if b.is_empty() {
+            DEFAULT_CHAT_BASE.to_string()
+        } else {
+            b.to_string()
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct ApiKeys {
-    pub deepseek: String,
-    pub openai: String,
-    pub relay: String,
-    /// Overseas relay key for ASR (/v1/audio/transcriptions). yunwu.ai
-    /// scopes each key to specific model groups, so ASR and chat may need
-    /// distinct keys depending on what the user bought.
-    pub overseas: String,
-    /// Overseas relay key for chat (/v1/chat/completions, used for polish
-    /// and translate). Falls back to `overseas` if not set so single-key
-    /// users (whose key covers everything) still work.
-    pub overseas_chat: String,
-    pub volc_app_id: String,
-    pub volc_access_token: String,
-    pub volc_cluster_zh: String,
-    pub volc_cluster_ko: String,
-}
+    /// Chat API key: config value, or `OPENAI_API_KEY` from env as a fallback
+    /// for users who prefer a `.env` file.
+    pub fn chat_key(&self) -> String {
+        let k = self.api_key.trim();
+        if !k.is_empty() {
+            k.to_string()
+        } else {
+            std::env::var("OPENAI_API_KEY").unwrap_or_default()
+        }
+    }
 
-impl ApiKeys {
-    pub fn from_env() -> Self {
-        let _ = dotenvy::dotenv();
-        Self {
-            deepseek: std::env::var("DEEPSEEK_API_KEY").unwrap_or_default(),
-            openai: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
-            relay: std::env::var("RELAY_API_KEY").unwrap_or_default(),
-            overseas: std::env::var("OVERSEAS_API_KEY").unwrap_or_default(),
-            overseas_chat: std::env::var("OVERSEAS_CHAT_API_KEY").unwrap_or_default(),
-            volc_app_id: std::env::var("VOLC_APP_ID").unwrap_or_default(),
-            volc_access_token: std::env::var("VOLC_ACCESS_TOKEN").unwrap_or_default(),
-            volc_cluster_zh: std::env::var("VOLC_CLUSTER_ZH")
-                .unwrap_or_else(|_| "volcengine_input_common".into()),
-            volc_cluster_ko: std::env::var("VOLC_CLUSTER_KO")
-                .unwrap_or_else(|_| "volcengine_input_ko_kr".into()),
+    pub fn chat_model(&self) -> String {
+        let m = self.chat_model.trim();
+        if m.is_empty() {
+            DEFAULT_CHAT_MODEL.to_string()
+        } else {
+            m.to_string()
+        }
+    }
+
+    /// ASR endpoint — falls back to the chat endpoint when not split off.
+    pub fn asr_base(&self) -> String {
+        let b = self.asr_base_url.trim();
+        if b.is_empty() {
+            self.chat_base()
+        } else {
+            b.to_string()
+        }
+    }
+
+    pub fn asr_key(&self) -> String {
+        let k = self.asr_key.trim();
+        if !k.is_empty() {
+            k.to_string()
+        } else {
+            self.chat_key()
+        }
+    }
+
+    pub fn asr_model(&self) -> String {
+        let m = self.asr_model.trim();
+        if m.is_empty() {
+            DEFAULT_ASR_MODEL.to_string()
+        } else {
+            m.to_string()
         }
     }
 }
