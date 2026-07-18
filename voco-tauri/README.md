@@ -1,7 +1,23 @@
-# Tauri + React + Typescript
+# VoCo — desktop app (`voco-tauri`)
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+The VoCo Windows desktop app: hold a hotkey, speak, and your words are
+transcribed and polished / translated by AI, then typed at the cursor.
+Built with Tauri 2 (Rust) + React + Tailwind.
 
-## Recommended IDE Setup
+## Run
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+On first launch (or later in Settings → AI service), fill in an
+OpenAI-compatible endpoint and API key — see the repo root
+[README](../README.md) for the full setup and key configuration.
+
+## Stack
+
+| Path | What's in it |
+|------|--------------|
+| `src-tauri/` | Rust backend — audio capture, ASR, AI polish/translate, global hotkey, paste-to-cursor |
+| `src/` | React + Tailwind frontend — main window, HUD overlay, setup wizard |
