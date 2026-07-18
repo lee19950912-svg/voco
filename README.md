@@ -1,42 +1,42 @@
-# VoCo · 语音输入法
+# VoCo · Voice Input Method
 
-按住热键说话，实时转成文字并用 AI 顺手润色 / 翻译，直接输出到任何输入框。
-Windows 桌面应用，基于 Tauri + React + Rust。
+Hold a hotkey and speak — your voice is transcribed in real time, polished / translated by AI, and typed straight into any input field.
+A Windows desktop app built with Tauri + React + Rust.
 
-## 功能
+## Features
 
-- 🎙️ **实时语音识别** —— 火山引擎「一句话识别」，中文识别准
-- ✨ **AI 润色** —— 把口语自动整理成通顺的书面语
-- 🌐 **即时翻译** —— 说中文，直接出英文 / 韩文
-- 📝 **自动分点、代码场景优化** —— 说什么场景就整理成什么格式
-- ⌨️ **随处可用** —— 微信、Slack、飞书、Cursor……任何能打字的地方
-- 🔒 **隐私优先** —— API 密钥和历史记录都存在本地
+- 🎙️ **Real-time speech recognition** — powered by Volcano Engine short-audio recognition, accurate for Chinese
+- ✨ **AI polishing** — turns casual speech into clean, well-formed writing
+- 🌐 **Instant translation** — speak Chinese, get English / Korean out
+- 📝 **Auto-formatting & code-aware output** — formats the text to match the context you're in
+- ⌨️ **Works everywhere** — WeChat, Slack, Lark, Cursor… anywhere you can type
+- 🔒 **Privacy first** — API keys and history stay on your machine
 
-## 目录结构
+## Repository structure
 
-| 目录 | 说明 |
-|------|------|
-| `voco-tauri/` | **当前桌面端**（Tauri + React + Rust）—— 活跃开发 |
-| `voco-landing/` | 产品落地页（React + Vite） |
-| 根目录 `*.py` | 早期 PyQt 原型，已归档、停止维护 |
+| Directory | Description |
+|-----------|-------------|
+| `voco-tauri/` | **Current desktop app** (Tauri + React + Rust) — active development |
+| `voco-landing/` | Product landing page (React + Vite) |
+| Root `*.py` | Early PyQt prototype, archived and no longer maintained |
 
-## 快速开始（桌面端）
+## Quick start (desktop app)
 
 ```bash
 cd voco-tauri
-cp .env.example .env      # 然后填入自己的 API Key（见下）
+cp .env.example .env      # then fill in your own API keys (see below)
 pnpm install
 pnpm tauri dev
 ```
 
-需要先装好 [Rust](https://www.rust-lang.org/)、[Node.js](https://nodejs.org/) 和 pnpm。
+You'll need [Rust](https://www.rust-lang.org/), [Node.js](https://nodejs.org/) and pnpm installed first.
 
-## 配置密钥
+## Configuring keys
 
-本仓库**不含任何密钥**，运行前需自行注册并填入 `voco-tauri/.env`（模板见 `voco-tauri/.env.example`）：
+This repository contains **no secrets**. Before running, register and fill in `voco-tauri/.env` yourself (template at `voco-tauri/.env.example`):
 
-- 火山引擎（语音识别）：https://www.volcengine.com/
-- DeepSeek（AI 润色）：https://platform.deepseek.com/
+- Volcano Engine (speech recognition): https://www.volcengine.com/
+- DeepSeek (AI polishing): https://platform.deepseek.com/
 
 ## License
 
